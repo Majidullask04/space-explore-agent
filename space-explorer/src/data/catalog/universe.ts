@@ -1,0 +1,81 @@
+import { LIGHT_YEAR } from "./units"
+import type { CelestialBody } from "./types"
+
+const LY = LIGHT_YEAR
+
+export const UNIVERSE: CelestialBody[] = [
+  {
+    id: "andromeda",
+    name: "Andromeda (M31)",
+    regime: "observable_universe",
+    distFromOriginM: 2.5e6 * LY,
+    distFromEarthM: 2.5e6 * LY,
+    profile: {
+      radiusM: 1.1e21,
+      massKg: 1.2e42,
+      surfaceG: 0,
+      rotationHours: 0,
+      meanTempK: 3,
+      albedo: 0,
+      color: "#ffe0c0",
+      emissive: true,
+    },
+    marker: "landmark",
+    description: "Nearest large spiral galaxy; on collision course with the Milky Way.",
+  },
+  {
+    id: "triangulum",
+    name: "Triangulum (M33)",
+    regime: "observable_universe",
+    distFromOriginM: 2.73e6 * LY,
+    distFromEarthM: 2.73e6 * LY,
+    profile: {
+      radiusM: 6e20,
+      massKg: 5e40,
+      surfaceG: 0,
+      rotationHours: 0,
+      meanTempK: 3,
+      albedo: 0,
+      color: "#a8c0ff",
+      emissive: true,
+    },
+    description: "Third-largest member of the Local Group.",
+  },
+  {
+    id: "virgo-supercluster",
+    name: "Virgo Supercluster",
+    regime: "observable_universe",
+    distFromOriginM: 6.5e7 * LY,
+    distFromEarthM: 6.5e7 * LY,
+    profile: {
+      radiusM: 2.5e23,
+      massKg: 1e45,
+      surfaceG: 0,
+      rotationHours: 0,
+      meanTempK: 3,
+      albedo: 0,
+      color: "#cdb0ff",
+      emissive: true,
+    },
+    description: "The galactic supercluster that includes the Local Group.",
+  },
+  {
+    id: "laniakea",
+    name: "Laniakea Supercluster",
+    regime: "observable_universe",
+    distFromOriginM: 2.5e8 * LY,
+    distFromEarthM: 2.5e8 * LY,
+    profile: {
+      radiusM: 1.6e24,
+      massKg: 1e47,
+      surfaceG: 0,
+      rotationHours: 0,
+      meanTempK: 3,
+      albedo: 0,
+      color: "#b0c8ff",
+      emissive: true,
+    },
+    marker: "landmark",
+    description: "Our home supercluster — a cosmic web filament basin.",
+  },
+]

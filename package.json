@@ -4,7 +4,12 @@
   "description": "",
   "main": "app.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "npm --prefix space-explorer run dev",
+    "build": "npm --prefix space-explorer run build",
+    "lint": "npm --prefix space-explorer run lint",
+    "verify:shots": "npm --prefix space-explorer run verify:shots",
+    "server": "npm --prefix space-explorer run server",
+    "test": "echo \"no shared tests\" && exit 0"
   },
   "keywords": [],
   "author": "",
