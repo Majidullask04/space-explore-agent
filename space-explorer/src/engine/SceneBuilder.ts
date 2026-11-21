@@ -389,9 +389,17 @@ export class SceneBuilder {
       labelFor("sun", "Sun", sun, { kind: "star", sub: "G2V · 5,772 K", priority: 10 }),
     )
 
-    const light = new THREE.PointLight("#fff2dd", 4.6, 0, 0)
-    group.add(light)
-    group.add(new THREE.AmbientLight("#0b1624", 0.38))
+    // DirectionalLight: parallel sunlight from the Sun, intensity is a plain
+    // multiplier (no inverse-square falloff), appropriate for solar-system scale.
+    const sunLight = new THREE.DirectionalLight("#fff2dd", 4.0)
+    sunLight.position.set(0, 0, 0)
+    sunLight.target.position.set(1, 0, 0)
+    sunLight.target.updateMatrixWorld()
+    sunLight.castShadow = false
+    group.add(sunLight.target)
+    group.add(sunLight)
+
+    group.add(new THREE.AmbientLight("#0b1624", 0.25))
 
     const planetGroups = new Map<string, THREE.Group>()
     const earthMaterial = createEarthMaterial(this.earth, new THREE.Vector3(1, 0, 0), {
@@ -523,35 +531,57 @@ export class SceneBuilder {
     })
 
     const jupiter = planetGroups.get("jupiter")!
-    const jupiterMoons: Array<[string, string, number, number]> = [
-      ["io", "#d8c17a", 5.3, 1.3],
-      ["europa", "#d8d2c0", 6.5, 1.15],
-      ["ganymede", "#a89e90", 7.9, 1.45],
-      ["callisto", "#8c8478", 9.6, 1.25],
+    const jupiterMoons: Array<{ id: string; color: string; distance: number; size: number; period: number }> = [
+      { id: "io", color: "#d8c17a", distance: 5.3, size: 1.3, period: 1.77 },
+      { id: "europa", color: "#d8d2c0", distance: 6.5, size: 1.15, period: 3.55 },
+      { id: "ganymede", color: "#a89e90", distance: 7.9, size: 1.45, period: 7.15 },
+      { id: "callisto", color: "#8c8478", distance: 9.6, size: 1.25, period: 16.69 },
     ]
-    const jupiterPivots: Array<{ pivot: THREE.Group; period: number }> = []
-    for (const [id, color, distance, size] of jupiterMoons) {
-      const pivot = new THREE.Group()
-      const mesh = new THREE.Mesh(
-        new THREE.SphereGeometry(size * 0.55, 24, 24),
-        new THREE.MeshStandardMaterial({ color, roughness: 1 }),
-      )
-      mesh.position.set(distance, 0, 0)
-      mesh.userData.bodyId = id
-      pivot.add(mesh)
-      jupiter.add(pivot)
-      bodies.set(id, mesh)
+
+    // One InstancedMesh for the Galilean moons: shared geometry + material,
+    // per-instance matrix (position/scale) and per-instance color.
+    const moonGeo = new THREE.SphereGeometry(1, 24, 24)
+    const moonMat = new THREE.MeshStandardMaterial({ roughness: 1 })
+    const jupiterMoonsMesh = new THREE.InstancedMesh(moonGeo, moonMat, jupiterMoons.length)
+    const dummy = new THREE.Object3D()
+    // Reusable temporaries (avoid per-frame allocations in the label getPosition path)
+    const tmpMatrix = new THREE.Matrix4()
+    const tmpQuat = new THREE.Quaternion()
+    const tmpScale = new THREE.Vector3()
+    // Cached world positions for label projection, refreshed each frame in update()
+    const moonWorldPos: THREE.Vector3[] = jupiterMoons.map(() => new THREE.Vector3())
+
+    for (let i = 0; i < jupiterMoons.length; i++) {
+      const m = jupiterMoons[i]
+      dummy.position.set(m.distance, 0, 0)
+      dummy.scale.setScalar(m.size * 0.55)
+      dummy.updateMatrix()
+      jupiterMoonsMesh.setMatrixAt(i, dummy.matrix)
+      jupiterMoonsMesh.setColorAt(i, new THREE.Color(m.color))
+      const meshProxy = new THREE.Mesh(moonGeo, moonMat)
+      meshProxy.userData.bodyId = m.id
+      bodies.set(m.id, meshProxy)
       labels.push({
-        id,
-        name: findBody(id)?.name ?? id,
-        bodyId: id,
+        id: m.id,
+        name: findBody(m.id)?.name ?? m.id,
+        bodyId: m.id,
         kind: "moon",
         priority: 2,
         maxCameraDistance: 90,
-        getPosition: () => mesh.getWorldPosition(new THREE.Vector3()),
+        getPosition: () => moonWorldPos[i],
       })
-      jupiterPivots.push({ pivot, period: 1.77 + distance * 0.32 })
     }
+    jupiterMoonsMesh.instanceMatrix.needsUpdate = true
+    const instanceColor = jupiterMoonsMesh.instanceColor
+    if (instanceColor) instanceColor.needsUpdate = true
+    jupiterMoonsMesh.userData.bodyId = "jupiter-moons"
+    jupiterMoonsMesh.userData.layer = "orbits"
+    jupiter.add(jupiterMoonsMesh)
+
+    // Per-moon orbital state for the update loop
+    const jupiterMoonState: Array<{ id: string; distance: number; period: number; index: number }> = jupiterMoons.map((m, i) => ({
+      id: m.id, distance: m.distance, period: m.period, index: i,
+    }))
 
     const asteroidBelt = this.buildBelt(1800, 2.08, 3.3, "#94a3b8", 0.42, 11)
     asteroidBelt.userData.layer = "belts"
@@ -600,10 +630,20 @@ export class SceneBuilder {
         if (holder) holder.rotation.y = (days / (PLANET_ELEMENTS[id]?.periodDays ?? 365)) * Math.PI * 2
       }
       moonPivot.rotation.y = (days / 27.3217) * Math.PI * 2 + 0.6
-      for (let i = 0; i < jupiterPivots.length; i++) {
-        const { pivot, period } = jupiterPivots[i]
-        pivot.rotation.y = (days / period) * Math.PI * 2 + i * 1.2
+      // Animate the Galilean moon InstancedMesh: per-instance orbital position.
+      // Reuse one dummy across instances to avoid allocations.
+      for (const m of jupiterMoonState) {
+        const angle = (days / m.period) * Math.PI * 2
+        dummy.position.set(m.distance * Math.cos(angle), 0, m.distance * Math.sin(angle))
+        dummy.scale.setScalar(jupiterMoons[m.index].size * 0.55)
+        dummy.updateMatrix()
+        jupiterMoonsMesh.setMatrixAt(m.index, dummy.matrix)
+        // Cache world position for label projection: instance local -> jupiter world space
+        jupiterMoonsMesh.getMatrixAt(m.index, tmpMatrix)
+        tmpMatrix.decompose(moonWorldPos[m.index], tmpQuat, tmpScale)
+        moonWorldPos[m.index].applyMatrix4(jupiter.matrixWorld)
       }
+      jupiterMoonsMesh.instanceMatrix.needsUpdate = true
       sun.rotation.y = (days / 25.38) * Math.PI * 2
     }
     update({

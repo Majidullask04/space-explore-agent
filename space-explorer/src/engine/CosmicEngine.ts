@@ -15,6 +15,7 @@ import type {
   StarRecord,
 } from "../data/types"
 import { disposeObject } from "./helpers"
+import { createPostProcessing, type PostProcessing } from "./postProcessing"
 import {
   BODY_LOG_DIST,
   formatLightTime,
@@ -103,13 +104,14 @@ export class CosmicEngine {
   private timeWarp = 1
   private lastSpeed = 1
   private raf = 0
-  private clock = new THREE.Clock()
+  private timer = new THREE.Timer()
   private disposed = false
   private frameAccumulator = 0
   private labelSubAccumulator = 0
   private downPoint: { x: number; y: number } | null = null
   private raycaster = new THREE.Raycaster()
   private resizeObserver: ResizeObserver
+  private postProcessing: PostProcessing
   private surfaceSource: "gibs" | "fallback" | "none" = "none"
   private fpsFrames = 0
   private fpsTime = 0
@@ -149,6 +151,7 @@ export class CosmicEngine {
       0.05,
       120000,
     )
+    ;(this.camera as { logarithmicDepthBuffer?: boolean }).logarithmicDepthBuffer = true // stable depth across 25 orders of magnitude
     this.scene.background = new THREE.Color("#000000")
     this.rig = new CameraRig(this.camera, this.renderer.domElement, 2.4)
     this.rig.autoRotate = false
@@ -162,6 +165,8 @@ export class CosmicEngine {
       }
       this.callbacks.onFrame?.(this.frameInfo())
     }
+
+    this.postProcessing = createPostProcessing(this.renderer, this.scene, this.camera)
 
     this.builder = new SceneBuilder(options.stars)
     this.builder.onSurfaceSource = (source) => {
@@ -185,6 +190,9 @@ export class CosmicEngine {
     this.applyHome("surface", true)
     this.rebuildLabels()
 
+    // Pre-compile all shader programs so the first regime transition has no stall
+    void this.renderer.compileAsync(this.scene, this.camera)
+
     this.renderer.domElement.addEventListener("pointerdown", this.onPointerDown)
     this.renderer.domElement.addEventListener("pointerup", this.onPointerUp)
     this.renderer.domElement.addEventListener("pointercancel", this.onPointerCancel)
@@ -193,7 +201,7 @@ export class CosmicEngine {
     this.resizeObserver.observe(container)
     window.addEventListener("resize", this.onResize)
 
-    this.clock.start()
+    this.timer.connect(document) // pauses delta while the tab is hidden
     this.raf = requestAnimationFrame(this.loop)
     requestAnimationFrame(() => this.callbacks.onReady?.())
   }
@@ -676,7 +684,8 @@ export class CosmicEngine {
   private loop = () => {
     if (this.disposed) return
     this.raf = requestAnimationFrame(this.loop)
-    const dt = Math.min(0.06, this.clock.getDelta())
+    this.timer.update()
+    const dt = Math.min(0.06, this.timer.getDelta())
     this.fpsFrames++
     this.fpsTime += dt
     if (this.fpsTime > 1) {
@@ -717,7 +726,7 @@ export class CosmicEngine {
 
     this.scene.updateMatrixWorld(true)
     this.updateLabels(dt)
-    this.renderer.render(this.scene, this.camera)
+    this.postProcessing.render(dt)
 
     this.frameAccumulator += dt
     if (this.frameAccumulator > 0.08) {
@@ -752,6 +761,7 @@ export class CosmicEngine {
     this.camera.aspect = width / height
     this.camera.updateProjectionMatrix()
     this.renderer.setSize(width, height)
+    this.postProcessing.setSize(width, height)
     this.frameAccumulator = 1
   }
 
@@ -772,12 +782,14 @@ export class CosmicEngine {
   dispose() {
     this.disposed = true
     cancelAnimationFrame(this.raf)
+    this.timer.dispose()
     this.resizeObserver.disconnect()
     window.removeEventListener("resize", this.onResize)
     this.renderer.domElement.removeEventListener("pointerdown", this.onPointerDown)
     this.renderer.domElement.removeEventListener("pointerup", this.onPointerUp)
     this.renderer.domElement.removeEventListener("pointercancel", this.onPointerCancel)
     this.rig.dispose()
+    this.postProcessing.dispose()
     for (const built of Object.values(this.regimes)) {
       this.scene.remove(built.group)
       disposeObject(built.group)
