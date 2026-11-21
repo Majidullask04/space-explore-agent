@@ -1,5 +1,5 @@
 /* ------------------------------------------------------------------ */
-/* HUD layout                                                          */
+/* Minimal, Obstacle-Free Cosmic HUD Layout                            */
 /* ------------------------------------------------------------------ */
 
 .app {
@@ -7,378 +7,498 @@
   width: 100vw;
   height: 100vh;
   overflow: hidden;
+  background: #000000;
+}
+
+.scene-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
 }
 
 .scene-canvas canvas {
   display: block;
+  width: 100%;
+  height: 100%;
 }
 
-/* ---- top telemetry bar ---- */
-.top-telemetry {
+/* ---- minimal whisper-quiet HUD root ---- */
+.minimal-hud {
   position: absolute;
-  top: var(--space-md);
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  gap: var(--space-lg);
-  padding: var(--space-xs) var(--space-lg);
-  z-index: var(--z-hud-top);
-  white-space: nowrap;
+  inset: 0;
+  pointer-events: none;
+  z-index: 20;
+  transition: opacity 0.45s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.tele-cell {
+.minimal-hud.is-dimmed {
+  opacity: 0.32;
+}
+
+/* ---- 1. Top-left minimal typographic readout (no box, no border, no background) ---- */
+.top-readout {
+  position: absolute;
+  top: 28px;
+  left: 32px;
   display: flex;
   flex-direction: column;
-  gap: var(--space-3xs);
+  gap: 6px;
+  pointer-events: none;
+  user-select: none;
+  max-width: 480px;
 }
 
-.tele-value {
-  font-size: var(--text-xs);
-  color: var(--c-ink);
+.top-readout-region {
+  font-family: var(--font-ui);
+  font-weight: 300;
+  font-size: 1.15rem;
+  letter-spacing: 0.03em;
+  color: #ffffff;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.85);
+  line-height: 1.25;
 }
 
-/* ---- left scale ladder ---- */
-.scale-ladder {
-  position: absolute;
-  left: var(--space-md);
-  top: 50%;
-  transform: translateY(-50%);
-  padding: var(--space-md);
-  z-index: var(--z-hud);
-  min-width: 168px;
-}
-
-.ladder-title {
-  display: block;
-  margin-bottom: var(--space-sm);
-}
-
-.ladder-track {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2xs);
-}
-
-.ladder-rung {
+.top-readout-telemetry {
   display: flex;
   align-items: center;
-  gap: var(--space-xs);
-  padding: var(--space-2xs) var(--space-xs);
-  border-radius: var(--radius-sm);
-  color: var(--c-steel);
-  transition: background var(--dur-short) var(--ease-out), color var(--dur-short) var(--ease-out);
+  gap: 18px;
+  flex-wrap: wrap;
 }
 
-.ladder-rung:hover {
-  background: rgba(148, 163, 184, 0.1);
-  color: var(--c-ink);
+.top-tele-cell {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
 }
 
-.ladder-rung.is-active {
-  background: rgba(56, 189, 248, 0.12);
-  color: var(--c-accent);
+.top-tele-label {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.45);
 }
 
-.ladder-dot {
+.top-tele-value {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  font-weight: 400;
+  color: #38bdf8;
+  letter-spacing: -0.01em;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.9);
+}
+
+.top-tele-divider {
+  width: 1px;
+  height: 10px;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* ---- 2. Far-right hairline depth scrubber (2px vertical line, no box) ---- */
+.depth-scrubber {
+  position: absolute;
+  right: 24px;
+  top: 15%;
+  height: 70%;
+  width: 28px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  pointer-events: auto;
+  cursor: pointer;
+  user-select: none;
+}
+
+.depth-track {
+  position: relative;
+  width: 2px;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 1px;
+  transition: background 0.2s ease;
+}
+
+.depth-scrubber:hover .depth-track {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.depth-cursor {
+  position: absolute;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #38bdf8;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.85), 0 0 2px #ffffff;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+  transition: transform 0.15s ease, background-color 0.15s ease;
+}
+
+.depth-scrubber:hover .depth-cursor {
+  transform: translate(-50%, -50%) scale(1.3);
+  background: #7dd3fc;
+}
+
+.depth-ticks {
+  position: absolute;
+  right: 14px;
+  top: 0;
+  height: 100%;
+  pointer-events: none;
+}
+
+.depth-tick {
+  position: absolute;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transform: translateY(-50%);
+}
+
+.depth-tick-line {
+  width: 4px;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.depth-tick-label {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.35);
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  transform: translateX(-4px);
+}
+
+.depth-scrubber:hover .depth-tick-label,
+.depth-tick.is-active .depth-tick-label {
+  opacity: 0.85;
+  transform: translateX(0);
+}
+
+.depth-tick.is-active .depth-tick-line {
+  width: 8px;
+  background: #38bdf8;
+}
+
+.depth-tick.is-active .depth-tick-label {
+  color: #38bdf8;
+}
+
+/* ---- 3. Floating NASA Fact Card on Right Edge ---- */
+.fact-card {
+  position: absolute;
+  right: 64px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 330px;
+  max-height: 84vh;
+  overflow-y: auto;
+  background: rgba(5, 7, 12, 0.84);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 8px;
+  padding: 22px;
+  z-index: 30;
+  pointer-events: auto;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.8), 0 0 1px rgba(255, 255, 255, 0.15);
+  animation: factCardIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes factCardIn {
+  from {
+    opacity: 0;
+    transform: translateY(-50%) translateX(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(-50%) translateX(0);
+  }
+}
+
+.fact-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+
+.fact-card-category {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #38bdf8;
+}
+
+.fact-card-close {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 4px;
+  color: rgba(255, 255, 255, 0.5);
+  transition: color 0.15s ease, background 0.15s ease;
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
+.fact-card-close:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.fact-card-title {
+  font-family: var(--font-ui);
+  font-size: 1.25rem;
+  font-weight: 500;
+  color: #ffffff;
+  margin: 0 0 4px;
+  letter-spacing: -0.01em;
+}
+
+.fact-card-subtitle {
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.55);
+  margin-bottom: 14px;
+  line-height: 1.4;
+}
+
+.fact-card-desc {
+  font-size: 0.78rem;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.75);
+  margin: 0 0 18px;
+}
+
+.fact-card-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 18px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 14px;
+}
+
+.fact-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.fact-label {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.fact-val {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: #f1f5f9;
+}
+
+/* NASA Imagery in Fact Card */
+.fact-card-imagery {
+  margin-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 14px;
+}
+
+.fact-card-imagery-title {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: rgba(255, 255, 255, 0.45);
+  margin-bottom: 8px;
+}
+
+.fact-card-images {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.fact-img-card {
+  border-radius: 6px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.fact-img {
+  width: 100%;
+  height: 140px;
+  object-fit: cover;
+  display: block;
+}
+
+.fact-img-meta {
+  padding: 8px 10px;
+}
+
+.fact-img-caption {
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.75);
+  line-height: 1.35;
+  margin-bottom: 4px;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.fact-img-credit {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+/* Live ISS telemetry banner inside fact card */
+.fact-live-banner {
+  background: rgba(56, 189, 248, 0.08);
+  border: 1px solid rgba(56, 189, 248, 0.2);
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-bottom: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.fact-live-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: #38bdf8;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.fact-live-pulse {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: currentColor;
-  flex: 0 0 auto;
+  background: #34d399;
+  box-shadow: 0 0 6px #34d399;
+  animation: livePulse 1.8s infinite;
 }
 
-.ladder-label {
-  font-size: var(--text-2xs);
-  flex: 1;
+@keyframes livePulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.85); }
 }
 
-.ladder-unit {
-  font-size: var(--text-2xs);
-  color: var(--c-steel-2);
-}
-
-/* ---- inspector (right) ---- */
-.inspector,
-.compare-drawer {
-  position: absolute;
-  right: var(--space-md);
-  top: 50%;
-  transform: translateY(-50%);
-  width: 280px;
-  padding: var(--space-md);
-  z-index: var(--z-hud);
-}
-
-.inspector-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: var(--space-sm);
-}
-
-.icon-btn {
-  display: grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  border-radius: var(--radius-sm);
-  color: var(--c-steel);
-}
-
-.icon-btn:hover {
-  background: rgba(148, 163, 184, 0.12);
-  color: var(--c-ink);
-}
-
-.inspector-name {
-  font-size: var(--text-lg);
-  font-weight: 500;
-  margin: 0 0 var(--space-xs);
-  letter-spacing: var(--tracking);
-}
-
-.inspector-desc {
-  color: var(--c-steel);
-  font-size: var(--text-xs);
-  line-height: 1.5;
-  margin: 0 0 var(--space-md);
-}
-
-.inspector-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-sm);
-}
-
-.fact {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2xs);
-  border-top: var(--rule-hair) solid var(--c-hair);
-  padding-top: var(--space-xs);
-}
-
-.fact-value {
-  font-size: var(--text-xs);
-  color: var(--c-ink);
-}
-
-/* ---- compare drawer ---- */
-.compare-drawer {
-  width: 360px;
-}
-
-.compare-heads {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-xs);
-  margin-bottom: var(--space-sm);
-}
-
-.compare-name {
-  font-size: var(--text-xs);
-  color: var(--c-ink);
-  padding: var(--space-2xs) var(--space-xs);
-  background: rgba(56, 189, 248, 0.08);
-  border-radius: var(--radius-sm);
-}
-
-.compare-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.compare-table td {
-  padding: var(--space-2xs) var(--space-2xs);
-  font-size: var(--text-2xs);
-  border-bottom: var(--rule-hair) solid var(--c-hair);
-}
-
-.compare-table td:first-child {
-  color: var(--c-steel);
-}
-
-.compare-table td:nth-child(2),
-.compare-table td:nth-child(3) {
-  text-align: right;
-  color: var(--c-ink);
-}
-
-/* ---- lay controls ---- */
-.layer-controls {
-  position: absolute;
-  top: var(--space-md);
-  left: var(--space-md);
-  z-index: var(--z-hud-top);
-}
-
-.layer-toggle {
-  width: 36px;
-  height: 36px;
-  display: grid;
-  place-items: center;
-  color: var(--c-steel);
-}
-
-.layer-toggle:hover {
-  color: var(--c-ink);
-}
-
-.layer-menu {
-  margin-top: var(--space-xs);
-  padding: var(--space-sm);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-xs);
-}
-
-.layer-option {
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-  font-size: var(--text-xs);
-  cursor: pointer;
-}
-
-.layer-option input {
-  accent-color: var(--c-accent);
-}
-
-/* ---- agent dock (bottom) ---- */
-.agent-dock {
-  position: absolute;
-  bottom: var(--space-md);
-  left: 50%;
-  transform: translateX(-50%);
-  width: min(680px, calc(100vw - 48px));
-  padding: var(--space-sm) var(--space-md);
-  z-index: var(--z-hud-top);
-}
-
-.dock-row {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-xs);
-}
-
-.dock-input-wrap {
-  display: flex;
-  gap: var(--space-xs);
-}
-
-.dock-input {
-  flex: 1;
-  background: rgba(148, 163, 184, 0.08);
-  border: var(--rule-hair) solid var(--c-hair);
-  border-radius: var(--radius-md);
-  padding: var(--space-sm) var(--space-md);
-  color: var(--c-ink);
-  font-size: var(--text-sm);
-  outline: none;
-}
-
-.dock-input:focus {
-  border-color: var(--c-accent);
-}
-
-.dock-send {
-  width: 40px;
-  border-radius: var(--radius-md);
-  background: rgba(56, 189, 248, 0.16);
-  color: var(--c-accent);
-  display: grid;
-  place-items: center;
-}
-
-.dock-send:hover:not(:disabled) {
-  background: rgba(56, 189, 248, 0.26);
-}
-
-.dock-send:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-
-.dock-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2xs);
-  margin-top: var(--space-xs);
-}
-
-.chip {
-  font-size: var(--text-2xs);
+.fact-live-text {
   font-family: var(--font-mono);
-  color: var(--c-steel);
-  border: var(--rule-hair) solid var(--c-hair);
-  padding: var(--space-2xs) var(--space-sm);
-  border-radius: var(--radius-pill);
-  transition: border-color var(--dur-short) var(--ease-out), color var(--dur-short) var(--ease-out);
+  font-size: 0.72rem;
+  color: #f1f5f9;
 }
 
-.chip:hover:not(:disabled) {
-  border-color: var(--c-accent);
-  color: var(--c-accent);
+/* ---- 4. In-scene 3D Labels (zero box, unobtrusive text) ---- */
+.scene-label-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 10;
 }
 
-.chip:disabled {
-  opacity: 0.5;
-}
-
-.dock-trace {
-  margin-top: var(--space-sm);
-  max-height: 72px;
-  overflow: auto;
+.scene-label {
+  position: absolute;
+  transform: translate(-50%, -50%);
   display: flex;
   flex-direction: column;
-  gap: var(--space-2xs);
+  align-items: center;
+  gap: 1px;
+  background: transparent;
+  border: none;
+  padding: 2px 6px;
+  cursor: pointer;
+  pointer-events: auto;
+  user-select: none;
+  color: rgba(255, 255, 255, 0.7);
+  transition: opacity 0.2s ease, transform 0.2s ease, color 0.2s ease;
 }
 
-.trace-line {
-  display: flex;
-  gap: var(--space-sm);
-  font-size: var(--text-2xs);
+.scene-label.is-hidden {
+  display: none !important;
 }
 
-.trace-tool {
-  color: var(--c-accent);
+.scene-label-name {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.03em;
+  color: rgba(255, 255, 255, 0.85);
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.95);
+  white-space: nowrap;
 }
 
-.trace-summary {
-  color: var(--c-steel);
+.scene-label-sub {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: rgba(255, 255, 255, 0.45);
+  letter-spacing: 0.04em;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.95);
+  white-space: nowrap;
 }
 
-.trace-line.is-bad .trace-summary {
-  color: var(--c-crit);
+.scene-label-sub.is-empty {
+  display: none;
 }
 
-.dock-busy {
-  margin-top: var(--space-xs);
-  color: var(--c-mission);
-  font-size: var(--text-2xs);
+.scene-label:hover .scene-label-name,
+.scene-label.is-active .scene-label-name {
+  color: #38bdf8;
+  text-shadow: 0 0 10px rgba(56, 189, 248, 0.75);
 }
 
-/* ---- responsive ---- */
-@media (max-width: 720px) {
-  .top-telemetry {
-    left: var(--space-md);
-    right: var(--space-md);
-    transform: none;
-    flex-wrap: wrap;
-    gap: var(--space-xs);
+.scene-label-origin .scene-label-name {
+  color: #38bdf8;
+}
+
+.scene-label-star .scene-label-name {
+  color: #ffe0b2;
+}
+
+.scene-label-spacecraft .scene-label-name {
+  color: #f59e0b;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .top-readout {
+    top: 18px;
+    left: 20px;
+    max-width: calc(100vw - 70px);
   }
-  .scale-ladder {
-    left: var(--space-2xs);
-    min-width: 132px;
+  .top-readout-region {
+    font-size: 1rem;
   }
-  .ladder-label {
-    display: none;
+  .fact-card {
+    right: 18px;
+    width: min(310px, calc(100vw - 36px));
+    max-height: 80vh;
+    padding: 18px;
   }
-  .inspector,
-  .compare-drawer {
-    width: min(260px, calc(100vw - 24px));
-  }
-  .agent-dock {
-    width: calc(100vw - 24px);
+  .depth-scrubber {
+    right: 14px;
   }
 }

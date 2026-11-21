@@ -15,15 +15,26 @@ import type {
   StarRecord,
 } from "../data/types"
 import { disposeObject } from "./helpers"
+import {
+  BODY_LOG_DIST,
+  formatLightTime,
+  formatPhysicalDistance,
+  getPrimaryRegime,
+  getRegimeWeights,
+  getRegionName,
+} from "./scaleController"
 
 export interface EngineInfo {
   regime: RegimeId
   targetId: string | null
-  cameraDistance: number
-  scaleDistance: number
-  scaleUnit: "km" | "AU" | "ly" | "Mly" | "Gly"
+  logDist: number
+  distanceFromEarthM: number
+  lightTimeSeconds: number
+  regionName: string
+  distanceLabel: string
+  lightTimeLabel: string
   simDate: number
-  timeWarp: number
+  hudDim: boolean
   surfaceSource: "gibs" | "fallback" | "none"
 }
 
@@ -94,13 +105,11 @@ export class CosmicEngine {
   private raf = 0
   private clock = new THREE.Clock()
   private disposed = false
-  private transitionToken = 0
   private frameAccumulator = 0
   private labelSubAccumulator = 0
   private downPoint: { x: number; y: number } | null = null
   private raycaster = new THREE.Raycaster()
   private resizeObserver: ResizeObserver
-  private reducedMotion = false
   private surfaceSource: "gibs" | "fallback" | "none" = "none"
   private fpsFrames = 0
   private fpsTime = 0
@@ -112,7 +121,6 @@ export class CosmicEngine {
     this.origin = options.origin
     this.iss = options.iss ?? null
     this.layers = { ...DEFAULT_LAYERS, ...options.layers }
-    this.reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches
 
     this.renderer = new THREE.WebGLRenderer({
       antialias: true,
@@ -142,9 +150,16 @@ export class CosmicEngine {
       120000,
     )
     this.scene.background = new THREE.Color("#000000")
-    this.rig = new CameraRig(this.camera, this.renderer.domElement)
+    this.rig = new CameraRig(this.camera, this.renderer.domElement, 2.4)
     this.rig.autoRotate = false
     this.rig.onInteraction = () => {
+      if (
+        this.targetId &&
+        (this.rig.wasDrag() ||
+          Math.abs(this.rig.state.logDist - (BODY_LOG_DIST[this.targetId] ?? 0)) > 0.5)
+      ) {
+        this.select(null, false)
+      }
       this.callbacks.onFrame?.(this.frameInfo())
     }
 
@@ -188,18 +203,40 @@ export class CosmicEngine {
   /* ------------------------------------------------------------------ */
 
   setRegime(regime: RegimeId, immediate = false) {
-    if (regime === this.regime && !immediate) return
-    if (immediate || this.reducedMotion) {
-      this.applyHome(regime, true)
-      return
+    const REGIME_CENTERS: Record<RegimeId, number> = {
+      surface: 2.4,
+      orbit: 6.2,
+      solar_system: 10.5,
+      interstellar: 16.6,
+      milky_way: 20.2,
+      universe: 26.5,
     }
-    const token = ++this.transitionToken
-    this.veil.style.opacity = "1"
-    window.setTimeout(() => {
-      if (this.disposed || token !== this.transitionToken) return
-      this.applyHome(regime, false)
-      this.veil.style.opacity = "0"
-    }, 190)
+    const targetLog = REGIME_CENTERS[regime] ?? 2.4
+    this.setLogDist(targetLog, immediate)
+    this.applyHome(regime, immediate)
+  }
+
+  setLogDist(logDist: number, immediate = false) {
+    this.rig.setLogDist(logDist, immediate)
+    const primary = getPrimaryRegime(logDist)
+    if (primary !== this.regime) {
+      this.regime = primary
+      this.callbacks.onRegimeChange?.(primary)
+      this.rebuildLabels()
+    }
+    this.callbacks.onFrame?.(this.frameInfo())
+  }
+
+  setStars(stars: StarRecord[]) {
+    this.builder.setStars(stars)
+  }
+
+  async flyToBody(id: string, duration = 2.0): Promise<void> {
+    const targetLog = BODY_LOG_DIST[id]
+    if (targetLog !== undefined) {
+      this.setLogDist(targetLog)
+    }
+    await this.flyToTarget(id, undefined, duration)
   }
 
   private applyHome(regime: RegimeId, immediate: boolean) {
@@ -327,10 +364,15 @@ export class CosmicEngine {
   }
 
   async flyToTarget(id: string, regime?: RegimeId, duration = 2.3): Promise<void> {
+    const targetLog = BODY_LOG_DIST[id]
+    if (targetLog !== undefined) {
+      this.rig.setLogDist(targetLog)
+    }
     const resolved = this.resolveRegime(id, regime)
     if (resolved !== this.regime) {
-      this.setRegime(resolved)
-      await new Promise((resolve) => window.setTimeout(resolve, 240))
+      this.regime = resolved
+      this.callbacks.onRegimeChange?.(resolved)
+      this.rebuildLabels()
     }
     const built = this.current()
     const object = built.bodies.get(id)
@@ -348,7 +390,12 @@ export class CosmicEngine {
     const yaw = current.yaw + 0.35
     const pitch = Math.max(0.12, Math.min(0.7, current.pitch * 0.7 + 0.12))
     await new Promise<void>((resolve) => {
-      this.rig.flyTo({ target, distance, yaw, pitch }, duration, "power3.inOut", resolve)
+      this.rig.flyTo(
+        { target, distance, yaw, pitch, logDist: targetLog },
+        duration,
+        "power3.inOut",
+        resolve,
+      )
     })
   }
 
@@ -639,64 +686,62 @@ export class CosmicEngine {
     }
     if (this.timeWarp > 0) this.simTimeMs += dt * 1000 * this.timeWarp
     const date = new Date(this.simTimeMs)
-    const built = this.current()
-    built.update?.({
-      date,
-      dt,
-      iss: this.iss,
-      origin: this.origin,
-      layers: this.layers,
-    })
+
     this.rig.update(dt)
+
+    // Continuous logarithmic regime crossfading
+    const logDist = this.rig.state.logDist
+    const primary = getPrimaryRegime(logDist)
+    if (primary !== this.regime) {
+      this.regime = primary
+      this.callbacks.onRegimeChange?.(primary)
+      this.rebuildLabels()
+    }
+
+    const weights = getRegimeWeights(logDist)
+    for (const [id, built] of Object.entries(this.regimes) as Array<[RegimeId, BuiltRegime]>) {
+      const w = weights[id]
+      const visible = w > 0.005
+      built.group.visible = visible
+      if (visible) {
+        applyGroupOpacity(built.group, w)
+        built.update?.({
+          date,
+          dt,
+          iss: this.iss,
+          origin: this.origin,
+          layers: this.layers,
+        })
+      }
+    }
+
     this.scene.updateMatrixWorld(true)
     this.updateLabels(dt)
     this.renderer.render(this.scene, this.camera)
 
     this.frameAccumulator += dt
-    if (this.frameAccumulator > 0.22) {
+    if (this.frameAccumulator > 0.08) {
       this.frameAccumulator = 0
       this.callbacks.onFrame?.(this.frameInfo())
     }
   }
 
   private frameInfo(): EngineInfo {
-    const distance = this.rig.state.distance
-    let scaleDistance = distance
-    let scaleUnit: EngineInfo["scaleUnit"] = "km"
-    switch (this.regime) {
-      case "surface":
-        scaleDistance = distance * 1.2
-        scaleUnit = "km"
-        break
-      case "orbit":
-        scaleDistance = Math.max(0, (distance / 100 - 1) * 6378)
-        scaleUnit = "km"
-        break
-      case "solar_system":
-        scaleDistance = distance / 90
-        scaleUnit = "AU"
-        break
-      case "interstellar":
-        scaleDistance = distance
-        scaleUnit = "ly"
-        break
-      case "milky_way":
-        scaleDistance = distance * 500
-        scaleUnit = "ly"
-        break
-      case "universe":
-        scaleDistance = (distance / 300) * 46.5
-        scaleUnit = "Gly"
-        break
-    }
+    const logDist = this.rig.state.logDist
+    const distM = Math.pow(10, logDist)
+    const c = 299792458
+    const lightTimeS = distM / c
     return {
       regime: this.regime,
       targetId: this.targetId,
-      cameraDistance: distance,
-      scaleDistance,
-      scaleUnit,
+      logDist,
+      distanceFromEarthM: distM,
+      lightTimeSeconds: lightTimeS,
+      regionName: getRegionName(logDist, this.origin.label),
+      distanceLabel: formatPhysicalDistance(distM),
+      lightTimeLabel: formatLightTime(lightTimeS),
       simDate: this.simTimeMs,
-      timeWarp: this.timeWarp,
+      hudDim: this.rig.isInteracting,
       surfaceSource: this.surfaceSource,
     }
   }
@@ -742,4 +787,38 @@ export class CosmicEngine {
     this.renderer.dispose()
     this.renderer.domElement.remove()
   }
+}
+
+function applyGroupOpacity(group: THREE.Group, weight: number) {
+  if (weight >= 0.999) {
+    if (group.userData.isDimmed) {
+      group.userData.isDimmed = false
+      group.traverse((obj) => {
+        const mesh = obj as THREE.Mesh
+        if (mesh.material) {
+          const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+          for (const m of mats) {
+            if (m.userData.baseOpacity !== undefined) {
+              m.opacity = m.userData.baseOpacity as number
+            }
+          }
+        }
+      })
+    }
+    return
+  }
+  group.userData.isDimmed = true
+  group.traverse((obj) => {
+    const mesh = obj as THREE.Mesh
+    if (mesh.material) {
+      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+      for (const m of mats) {
+        if (m.userData.baseOpacity === undefined) {
+          m.userData.baseOpacity = m.opacity ?? 1
+        }
+        m.opacity = (m.userData.baseOpacity as number) * weight
+        m.transparent = true
+      }
+    }
+  })
 }

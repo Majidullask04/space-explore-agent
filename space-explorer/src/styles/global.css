@@ -2,7 +2,7 @@
   color-scheme: dark;
 
   /* --- core palette (Vantage / aerospace) --- */
-  --c-canvas: #05070b;
+  --c-canvas: #000000;
   --c-hud: rgba(11, 15, 23, 0.78);
   --c-hud-solid: #0b0f17;
   --c-hair: rgba(148, 163, 184, 0.16);

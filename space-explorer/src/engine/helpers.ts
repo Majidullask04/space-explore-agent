@@ -30,15 +30,22 @@ const STAR_VERTEX = /* glsl */ `
 
 const STAR_FRAGMENT = /* glsl */ `
   uniform float uOpacity;
+  uniform float uSoft;
   varying vec3 vColor;
   void main() {
     vec2 p = gl_PointCoord - vec2(0.5);
     float d = length(p);
     if (d > 0.5) discard;
-    float a = smoothstep(0.5, 0.04, d);
-    a = pow(a, 1.55);
-    vec3 col = vColor * (0.72 + a * 0.5);
-    gl_FragColor = vec4(col, a * uOpacity);
+    float a;
+    if (uSoft > 0.5) {
+      a = pow(clamp(1.0 - d * 2.0, 0.0, 1.0), 2.4);
+      gl_FragColor = vec4(vColor, a * uOpacity);
+    } else {
+      a = smoothstep(0.5, 0.04, d);
+      a = pow(a, 1.55);
+      vec3 col = vColor * (0.72 + a * 0.5);
+      gl_FragColor = vec4(col, a * uOpacity);
+    }
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
   }
@@ -50,6 +57,7 @@ export interface StarFieldOptions {
   minSize?: number
   maxSize?: number
   blending?: THREE.Blending
+  soft?: boolean
 }
 
 export function createStarPoints(points: StarPoint[], options: StarFieldOptions = {}): THREE.Points {
@@ -78,6 +86,7 @@ export function createStarPoints(points: StarPoint[], options: StarFieldOptions 
       uOpacity: { value: options.opacity ?? 0.95 },
       uMinSize: { value: options.minSize ?? 1 },
       uMaxSize: { value: options.maxSize ?? 12 },
+      uSoft: { value: options.soft ? 1.0 : 0.0 },
     },
     vertexShader: STAR_VERTEX,
     fragmentShader: STAR_FRAGMENT,

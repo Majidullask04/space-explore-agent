@@ -1,22 +1,14 @@
 import { useEffect, useRef } from "react"
-import { CosmicEngine, type EngineOptions } from "../engine/CosmicEngine"
-import type { ScaleRegime } from "../data/catalog/types"
+import { CosmicEngine, type EngineInfo, type EngineOptions } from "../engine/CosmicEngine"
+import type { RegimeId } from "../data/types"
 import { DEFAULT_LAYERS } from "../engine/CosmicEngine"
+import { loadStars } from "../lib/stars"
 
 interface SceneCanvasProps {
   origin: { lat: number; lng: number }
   onReady?: (engine: CosmicEngine) => void
-  onFrame?: (info: {
-    regime: ScaleRegime
-    targetId: string | null
-    cameraDistance: number
-    scaleDistance: number
-    scaleUnit: "km" | "AU" | "ly" | "Mly" | "Gly"
-    simDate: number
-    timeWarp: number
-    surfaceSource: "gibs" | "fallback" | "none"
-  }) => void
-  onRegimeChange?: (regime: ScaleRegime) => void
+  onFrame?: (info: EngineInfo) => void
+  onRegimeChange?: (regime: RegimeId) => void
   onTargetFocus?: (id: string | null) => void
 }
 
@@ -55,6 +47,15 @@ export default function SceneCanvas({
 
     engineRef.current = engine
     onReady?.(engine)
+
+    // Load Hipparcos/HYG stars in background
+    loadStars()
+      .then((stars) => {
+        engine.setStars(stars)
+      })
+      .catch(() => {
+        // Fallback procedural stars already generated
+      })
 
     return () => {
       engine.dispose()

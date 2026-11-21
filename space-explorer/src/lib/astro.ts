@@ -1,6 +1,6 @@
 export const AU_KM = 149_597_870.7
 export const LY_KM = 9.4607304725808e12
-export const PC_KM = 3.0856775814913673e13
+export const PC_KM = 3.08567758149137e13
 export const MLY_KM = LY_KM * 1e6
 export const GLY_KM = LY_KM * 1e9
 export const EARTH_RADIUS_KM = 6378.137

@@ -33,7 +33,6 @@ import {
   cmbTexture,
   cropTextureRegion,
   galaxyTexture,
-  nebulaSpriteTexture,
   ringAlphaTexture,
   texture,
 } from "./textures"
@@ -104,13 +103,6 @@ const PLANET_TEXTURES: Record<string, string> = {
   neptune: "/textures/neptune.jpg",
   pluto: "/textures/pluto.jpg",
   moon: "/textures/moon.jpg",
-}
-
-const NEBULA_IMAGES: Record<string, string> = {
-  "orion-nebula": "/nasa/orion-nebula.jpg",
-  "eagle-nebula": "/nasa/eagle.jpg",
-  "crab-nebula": "/nasa/crab.jpg",
-  "carina-nebula": "/nasa/carina.jpg",
 }
 
 const MILKY_WAY_SCALE = 1 / 500
@@ -485,7 +477,7 @@ export class SceneBuilder {
       const orbitLine = createHairline(
         planetOrbitAu(id, 256).map((p) => compressedAu(p)),
         id === "earth" ? "#38bdf8" : "#94a3b8",
-        id === "earth" ? 0.3 : 0.16,
+        id === "earth" ? 0.14 : 0.08,
         true,
       )
       orbitLine.userData.layer = "orbits"
@@ -863,58 +855,120 @@ export class SceneBuilder {
     const labels: LabelSpec[] = []
     const random = seededRandom(1977)
 
-    const galaxy = new THREE.Mesh(
-      new THREE.PlaneGeometry(130, 130),
-      new THREE.MeshBasicMaterial({
-        map: galaxyTexture(2048, 7),
-        transparent: true,
-        opacity: 0.88,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending,
-        toneMapped: false,
-      }),
-    )
-    galaxy.rotation.x = -Math.PI / 2
-    galaxy.position.y = -0.3
-    group.add(galaxy)
+    // 1. Central Bulge and Bar (16,000 particles)
+    const bulgePoints: StarPoint[] = []
+    const barAngle = THREE.MathUtils.degToRad(27)
+    const cosBar = Math.cos(barAngle)
+    const sinBar = Math.sin(barAngle)
+    const bulgeColors = [new THREE.Color("#ffe5b4"), new THREE.Color("#ffcf70"), new THREE.Color("#ffa834"), new THREE.Color("#fff3e0")]
 
-    const points: StarPoint[] = []
-    for (let i = 0; i < 28000; i++) {
-      const r = Math.pow(random(), 0.58) * 62
-      const arm = i % 4
-      const base = (arm / 4) * Math.PI * 2
-      const spiral = Math.log(Math.max(6, r) / 14) * 2.2
-      const spread = (0.12 + (r / 62) * 0.24) * (random() - 0.5)
-      const angle = base + spiral + spread
-      const jitter = (random() - 0.5) * (0.8 + (r / 62) * 3.2)
-      const x = Math.cos(angle) * r + jitter
-      const z = Math.sin(angle) * r + jitter * 0.5
-      const y = gaussian(random) * (0.35 + (r / 62) * 0.8)
-      const t = r / 62
-      const warm = t < 0.18
-      const color = new THREE.Color(warm ? "#ffe2b0" : random() < 0.2 ? "#c9dcff" : "#eef3ff")
-      points.push({
+    for (let i = 0; i < 16000; i++) {
+      const u = random()
+      const r = -Math.log(1 - u * 0.98) * 3.8
+      if (r > 20) continue
+
+      const alongBar = (random() - 0.5) * r * 1.8
+      const perpBar = gaussian(random) * (0.8 + r * 0.12)
+      const x = alongBar * cosBar - perpBar * sinBar
+      const z = alongBar * sinBar + perpBar * cosBar
+      const y = gaussian(random) * (1.8 * Math.exp(-r / 7) + 0.3)
+
+      const col = bulgeColors[Math.floor(random() * bulgeColors.length)]
+      bulgePoints.push({
         x,
         y,
         z,
-        r: color.r,
-        g: color.g,
-        b: color.b,
-        size: 0.5 + random() * (warm ? 1.2 : 0.8),
+        r: col.r,
+        g: col.g,
+        b: col.b,
+        size: 0.6 + random() * 1.4,
       })
     }
-    group.add(createStarPoints(points, { scale: 110, opacity: 0.8, minSize: 0.6, maxSize: 4 }))
-    group.add(createGlow("#ffd9a0", 30, 0.9))
-    group.add(createGlow("#fff1d6", 13, 0.9, true))
+    const bulgeMesh = createStarPoints(bulgePoints, { scale: 120, opacity: 0.95, minSize: 0.8, maxSize: 5.5, soft: true })
+    group.add(bulgeMesh)
+    group.add(createGlow("#ffd9a0", 28, 0.75))
+    group.add(createGlow("#ffaa44", 14, 0.65, true))
 
+    // 2. 4 Logarithmic Spiral Arms (54,000 particles)
+    const armPoints: StarPoint[] = []
+    const armColors = [
+      new THREE.Color("#b5d5ff"), // hot blue-white
+      new THREE.Color("#e6f0ff"), // pure white
+      new THREE.Color("#fff2d8"), // golden disk star
+      new THREE.Color("#88b4ff"), // bright blue knot
+      new THREE.Color("#ff8aa8"), // pink HII knot
+    ]
+
+    for (let i = 0; i < 54000; i++) {
+      const armIndex = i % 4
+      const baseAngle = (armIndex / 4) * Math.PI * 2
+      const r = 5.5 + Math.pow(random(), 0.72) * 58
+      const theta = baseAngle + Math.log(r / 5.5) / 0.23
+      const spread = (0.7 + (r / 60) * 4.2) * gaussian(random)
+      const angle = theta + spread / r
+      const x = Math.cos(angle) * r
+      const z = Math.sin(angle) * r
+      const y = gaussian(random) * (0.35 + (r / 60) * 0.9)
+
+      const isOB = random() < 0.28
+      const isHII = random() < 0.08
+      let col: THREE.Color
+      if (isHII) col = armColors[4]
+      else if (isOB) col = armColors[random() < 0.5 ? 0 : 3]
+      else col = armColors[random() < 0.5 ? 1 : 2]
+
+      armPoints.push({
+        x,
+        y,
+        z,
+        r: col.r,
+        g: col.g,
+        b: col.b,
+        size: 0.5 + random() * (isOB ? 1.6 : 0.9),
+      })
+    }
+    const armsMesh = createStarPoints(armPoints, { scale: 110, opacity: 0.88, minSize: 0.6, maxSize: 4.2, soft: true })
+    group.add(armsMesh)
+
+    // 3. Dark Dust Lanes (10,000 absorbing particles)
+    const dustPoints: StarPoint[] = []
+    const dustColors = [new THREE.Color("#180f08"), new THREE.Color("#24160c"), new THREE.Color("#0f0703")]
+    for (let i = 0; i < 10000; i++) {
+      const armIndex = i % 4
+      const baseAngle = (armIndex / 4) * Math.PI * 2 - 0.18 // inner edge
+      const r = 7.0 + Math.pow(random(), 0.68) * 52
+      const theta = baseAngle + Math.log(r / 5.5) / 0.23
+      const spread = (0.5 + (r / 60) * 2.5) * gaussian(random)
+      const angle = theta + spread / r
+      const x = Math.cos(angle) * r
+      const z = Math.sin(angle) * r
+      const y = gaussian(random) * (0.25 + (r / 60) * 0.6)
+
+      const col = dustColors[Math.floor(random() * dustColors.length)]
+      dustPoints.push({
+        x,
+        y,
+        z,
+        r: col.r,
+        g: col.g,
+        b: col.b,
+        size: 1.2 + random() * 2.2,
+      })
+    }
+    const dustMesh = createStarPoints(dustPoints, {
+      scale: 110,
+      opacity: 0.5,
+      minSize: 1.0,
+      maxSize: 6.0,
+      soft: true,
+      blending: THREE.NormalBlending,
+    })
+    group.add(dustMesh)
+
+    // 4. Sagittarius A* (Supermassive Black Hole with Accretion Glow - NO cartoon flat black dot!)
     const sgr = new THREE.Group()
-    const hole = new THREE.Mesh(
-      new THREE.SphereGeometry(1.15, 32, 32),
-      new THREE.MeshBasicMaterial({ color: "#000000" }),
-    )
-    sgr.add(hole)
-    sgr.add(createMarker("#f59e0b", 5.6, 0.9))
-    sgr.add(createGlow("#f59e0b", 10, 0.3))
+    sgr.add(createGlow("#ffb74d", 6.0, 0.95))
+    sgr.add(createMarker("#f59e0b", 3.8, 0.9))
     sgr.userData.bodyId = "sagittarius-a-star"
     group.add(sgr)
     bodies.set("sagittarius-a-star", sgr)
@@ -928,6 +982,7 @@ export class SceneBuilder {
       getPosition: () => sgr.getWorldPosition(new THREE.Vector3()),
     })
 
+    // 5. Sun in the Orion Arm
     const sun = createOriginMarker("#38bdf8", 2.4)
     sun.position.set(26000 * MILKY_WAY_SCALE, 0, 0)
     group.add(sun)
@@ -943,12 +998,13 @@ export class SceneBuilder {
     const sunOrbitRing = createHairline(
       circlePoints(26000 * MILKY_WAY_SCALE, 256, "xz"),
       "#38bdf8",
-      0.09,
+      0.08,
       true,
     )
     sunOrbitRing.userData.layer = "grid"
     group.add(sunOrbitRing)
 
+    // 6. Volumetric 3D Nebulae & Deep-Sky Objects (NO square image planes!)
     const milkyBodies = BODIES.filter((b) => b.regime === "milky_way" && b.id !== "sagittarius-a-star")
     for (const body of milkyBodies) {
       let position: THREE.Vector3
@@ -960,33 +1016,60 @@ export class SceneBuilder {
       } else {
         position = new THREE.Vector3(38, 1, -8)
       }
+
       const marker = new THREE.Group()
       marker.position.copy(position)
       marker.userData.bodyId = body.id
       marker.userData.focusDistance = 28
+
       if (body.kind === "nebula") {
-        const image = NEBULA_IMAGES[body.id]
-        const sprite = new THREE.Sprite(
-          new THREE.SpriteMaterial({
-            map: image
-              ? texture(image)
-              : nebulaSpriteTexture(body.color, body.id.length * 13),
-            color: new THREE.Color("#ffffff"),
-            transparent: true,
-            opacity: 0.9,
-            blending: THREE.AdditiveBlending,
-            depthWrite: false,
-            toneMapped: false,
-          }),
-        )
-        const size = body.notable ? 13 : 9
-        sprite.scale.set(size, size, 1)
-        marker.add(sprite)
-        marker.add(createMarker(body.color, 2.4, 0.8))
+        // Soft volumetric 3D particle cloud - purely procedural soft particles
+        const nebPoints: StarPoint[] = []
+        const nebCount = 420
+        const randNeb = seededRandom(body.id.length * 97 + 13)
+        const primaryCol = new THREE.Color(body.color || "#e070ff")
+        const secondaryCol = body.id === "orion-nebula"
+          ? new THREE.Color("#38d9c0")
+          : body.id === "carina-nebula"
+          ? new THREE.Color("#ffa033")
+          : body.id === "crab-nebula"
+          ? new THREE.Color("#ff7700")
+          : new THREE.Color("#4dd2ff")
+
+        const cloudRadius = body.notable ? 4.8 : 3.4
+        for (let j = 0; j < nebCount; j++) {
+          const np = new THREE.Vector3(
+            gaussian(randNeb) * cloudRadius * 0.45,
+            gaussian(randNeb) * cloudRadius * 0.35,
+            gaussian(randNeb) * cloudRadius * 0.45,
+          )
+          const useSec = randNeb() < 0.42
+          const c = useSec ? secondaryCol : primaryCol
+          nebPoints.push({
+            x: np.x,
+            y: np.y,
+            z: np.z,
+            r: c.r * (0.8 + randNeb() * 0.4),
+            g: c.g * (0.8 + randNeb() * 0.4),
+            b: c.b * (0.8 + randNeb() * 0.4),
+            size: 1.2 + randNeb() * 2.8,
+          })
+        }
+        const nebCloud = createStarPoints(nebPoints, {
+          scale: 85,
+          opacity: 0.75,
+          minSize: 1.5,
+          maxSize: 8.0,
+          soft: true,
+        })
+        marker.add(nebCloud)
+        marker.add(createMarker(body.color, 2.2, 0.8))
+        marker.add(createGlow(body.color, 5.0, 0.3))
       } else {
         marker.add(createMarker(body.color, 2.8, 0.9))
         marker.add(createGlow(body.color, 4.2, 0.18))
       }
+
       group.add(marker)
       bodies.set(body.id, marker)
       labels.push({
@@ -1031,78 +1114,127 @@ export class SceneBuilder {
     const labels: LabelSpec[] = []
     const random = seededRandom(13800)
 
+    // 1. Delicate Translucent Planck CMB Horizon Shell (at radius 300, low opacity <= 0.14)
     const cmb = new THREE.Mesh(
       new THREE.SphereGeometry(300, 64, 64),
       new THREE.MeshBasicMaterial({
         map: cmbTexture(),
         side: THREE.BackSide,
         transparent: true,
-        opacity: 0.34,
+        opacity: 0.12,
         depthWrite: false,
+        blending: THREE.AdditiveBlending,
         toneMapped: false,
       }),
     )
     group.add(cmb)
-    const horizonGrid = createHairline(circlePoints(298, 256, "xz"), "#f59e0b", 0.12, true)
+
+    const horizonGrid = createHairline(circlePoints(298, 256, "xz"), "#f59e0b", 0.08, true)
     horizonGrid.userData.layer = "grid"
     group.add(horizonGrid)
 
-    const web: StarPoint[] = []
-    const filaments = 18
-    for (let f = 0; f < filaments; f++) {
-      const theta = random() * Math.PI * 2
-      const phi = Math.acos(2 * random() - 1)
-      const dir = new THREE.Vector3(
-        Math.sin(phi) * Math.cos(theta),
-        Math.cos(phi),
-        Math.sin(phi) * Math.sin(theta),
+    // 2. Genuine 3D Cosmic Web: Filamentary Galaxy Superclusters
+    const NODES = [
+      { name: "Local Group", pos: new THREE.Vector3(0, 0, 0), color: "#ffffff", size: 1.2 },
+      { name: "Virgo Supercluster", pos: new THREE.Vector3(0, 24, 6), color: "#c8e2ff", size: 1.5 },
+      { name: "Laniakea / Great Attractor", pos: new THREE.Vector3(-44, 20, -64), color: "#ffd28e", size: 2.2 },
+      { name: "Perseus-Pisces", pos: new THREE.Vector3(56, -22, 44), color: "#a8d4ff", size: 1.8 },
+      { name: "Coma Cluster", pos: new THREE.Vector3(12, 62, -24), color: "#e2d0ff", size: 1.6 },
+      { name: "Shapley Supercluster", pos: new THREE.Vector3(-84, 30, -92), color: "#ffd59e", size: 2.4 },
+      { name: "Hercules Supercluster", pos: new THREE.Vector3(48, 48, -28), color: "#c0e8ff", size: 1.5 },
+      { name: "Centaurus Supercluster", pos: new THREE.Vector3(-32, 12, -46), color: "#ffdfb0", size: 1.6 },
+      { name: "Pavo-Indus", pos: new THREE.Vector3(-40, -42, -18), color: "#b8dcff", size: 1.4 },
+      { name: "Horologium-Reticulum", pos: new THREE.Vector3(-65, -55, 30), color: "#dcd0ff", size: 1.7 },
+      { name: "Sculptor Supercluster", pos: new THREE.Vector3(35, -50, -25), color: "#b5d8ff", size: 1.5 },
+    ]
+
+    const filamentEdges: Array<[THREE.Vector3, THREE.Vector3]> = [
+      [NODES[0].pos, NODES[1].pos],
+      [NODES[1].pos, NODES[7].pos],
+      [NODES[7].pos, NODES[2].pos],
+      [NODES[2].pos, NODES[5].pos],
+      [NODES[1].pos, NODES[4].pos],
+      [NODES[4].pos, NODES[6].pos],
+      [NODES[0].pos, NODES[3].pos],
+      [NODES[3].pos, NODES[6].pos],
+      [NODES[0].pos, NODES[8].pos],
+      [NODES[8].pos, NODES[2].pos],
+      [NODES[8].pos, NODES[9].pos],
+      [NODES[0].pos, NODES[10].pos],
+      [NODES[10].pos, NODES[3].pos],
+    ]
+
+    for (const [p1, p2] of filamentEdges) {
+      const mid = p1.clone().add(p2).multiplyScalar(0.5)
+      const bend = new THREE.Vector3(
+        gaussian(random) * 4.5,
+        gaussian(random) * 4.5,
+        gaussian(random) * 4.5,
       )
-      const length = 30 + random() * 110
-      const center = dir.clone().multiplyScalar(20 + random() * 80)
-      const tangent = new THREE.Vector3().crossVectors(dir, new THREE.Vector3(0, 1, 0.001)).normalize()
-      const tangent2 = new THREE.Vector3().crossVectors(dir, tangent).normalize()
-      for (let i = 0; i < 620; i++) {
-        const t = (random() - 0.5) * length
-        const spread = 0.8 + random() * 4.2
-        const p = center
-          .clone()
-          .add(tangent.clone().multiplyScalar(t))
-          .add(tangent2.clone().multiplyScalar(gaussian(random) * spread))
-          .add(dir.clone().multiplyScalar(gaussian(random) * spread * 0.6))
-        const warm = random() < 0.08
-        const color = new THREE.Color(warm ? "#e0a060" : random() < 0.3 ? "#8fb4d8" : "#d8e6f4")
-        web.push({
-          x: p.x,
-          y: p.y,
-          z: p.z,
-          r: color.r,
-          g: color.g,
-          b: color.b,
-          size: 0.5 + random() * 1.1,
-        })
-      }
+      mid.add(bend)
+      const curve = new THREE.QuadraticBezierCurve3(p1, mid, p2)
+      const spinePoints = curve.getPoints(24)
+      const spineLine = createHairline(spinePoints, "#7dd3fc", 0.07)
+      group.add(spineLine)
     }
-    for (let i = 0; i < 5200; i++) {
-      const r = Math.pow(random(), 0.5) * 135
-      const theta = random() * Math.PI * 2
-      const phi = Math.acos(2 * random() - 1)
-      const color = new THREE.Color(random() < 0.15 ? "#e0a060" : "#a8c0d8")
-      web.push({
-        x: r * Math.sin(phi) * Math.cos(theta),
-        y: r * Math.cos(phi),
-        z: r * Math.sin(phi) * Math.sin(theta),
-        r: color.r,
-        g: color.g,
-        b: color.b,
-        size: 0.4 + random() * 0.8,
+
+    const webPoints: StarPoint[] = []
+    const galaxyHues = [
+      new THREE.Color("#d0e4f7"),
+      new THREE.Color("#ffdfa0"),
+      new THREE.Color("#e8dcf8"),
+      new THREE.Color("#ffffff"),
+    ]
+
+    for (let i = 0; i < 35000; i++) {
+      let p: THREE.Vector3
+      let col: THREE.Color
+      let size: number
+
+      if (random() < 0.72) {
+        const edge = filamentEdges[Math.floor(random() * filamentEdges.length)]
+        const t = random()
+        const base = edge[0].clone().lerp(edge[1], t)
+        const transverse = (1.2 + Math.sin(t * Math.PI) * 2.8) * gaussian(random)
+        const perp = new THREE.Vector3(gaussian(random), gaussian(random), gaussian(random)).normalize().multiplyScalar(transverse)
+        p = base.add(perp)
+        col = galaxyHues[Math.floor(random() * (galaxyHues.length - 1))]
+        size = 0.5 + random() * 1.1
+      } else {
+        const theta = random() * Math.PI * 2
+        const phi = Math.acos(2 * random() - 1)
+        const r = 25 + Math.pow(random(), 0.6) * 165
+        p = new THREE.Vector3(
+          r * Math.sin(phi) * Math.cos(theta),
+          r * Math.cos(phi),
+          r * Math.sin(phi) * Math.sin(theta),
+        )
+        const distBootes = p.distanceTo(new THREE.Vector3(25, 42, 25))
+        if (distBootes < 24) continue
+
+        col = galaxyHues[Math.floor(random() * galaxyHues.length)]
+        size = 0.4 + random() * 0.9
+      }
+
+      webPoints.push({
+        x: p.x,
+        y: p.y,
+        z: p.z,
+        r: col.r,
+        g: col.g,
+        b: col.b,
+        size,
       })
     }
-    group.add(createStarPoints(web, { scale: 120, opacity: 0.5, minSize: 0.5, maxSize: 2.6 }))
 
+    const webMesh = createStarPoints(webPoints, { scale: 115, opacity: 0.65, minSize: 0.6, maxSize: 3.5, soft: true })
+    group.add(webMesh)
+
+    // Local Group cluster at center
     const localGroup = new THREE.Group()
     for (let i = 0; i < 90; i++) {
-      const p = new THREE.Vector3(gaussian(random) * 5, gaussian(random) * 2.5, gaussian(random) * 5)
-      const dot = createGlow(random() < 0.2 ? "#e0a060" : "#c8d8e8", 0.7 + random() * 0.8, 0.7)
+      const p = new THREE.Vector3(gaussian(random) * 4.5, gaussian(random) * 2.2, gaussian(random) * 4.5)
+      const dot = createGlow(random() < 0.25 ? "#ffd9a0" : "#c8e2ff", 0.8 + random() * 0.9, 0.75)
       dot.position.copy(p)
       localGroup.add(dot)
     }
@@ -1119,14 +1251,15 @@ export class SceneBuilder {
       getPosition: () => localGroup.getWorldPosition(new THREE.Vector3()),
     })
 
+    // Universe catalog bodies
     const universeBodies = BODIES.filter((b) => b.regime === "universe")
     for (const body of universeBodies) {
       if (body.id === "local-group") continue
       let position: THREE.Vector3
       if (body.id === "laniakea") {
-        position = new THREE.Vector3(-34, 18, -64)
+        position = new THREE.Vector3(-44, 20, -64)
       } else if (body.id === "cosmic-web") {
-        position = new THREE.Vector3(42, 22, 48)
+        position = new THREE.Vector3(42, 24, 46)
       } else if (body.id === "cmb-horizon") {
         position = new THREE.Vector3(0, 0, -286)
       } else if (body.raDeg !== undefined && body.decDeg !== undefined && body.distLy) {
@@ -1137,40 +1270,43 @@ export class SceneBuilder {
       } else {
         position = new THREE.Vector3(18, 8, 28)
       }
+
       const marker = new THREE.Group()
       marker.position.copy(position)
       marker.userData.bodyId = body.id
       marker.userData.focusDistance = body.kind === "cluster" || body.kind === "region" ? 60 : 32
+
       if (body.kind === "galaxy") {
         const sprite = new THREE.Sprite(
           new THREE.SpriteMaterial({
             map: galaxyTexture(1024, body.id.length * 11),
             color: new THREE.Color(body.color),
             transparent: true,
-            opacity: 0.9,
+            opacity: 0.85,
             blending: THREE.AdditiveBlending,
             depthWrite: false,
             toneMapped: false,
           }),
         )
-        const size = body.notable ? 15 : 10
+        const size = body.notable ? 14 : 9
         sprite.scale.set(size, size, 1)
         marker.add(sprite)
       } else if (body.kind === "cluster") {
-        const sprite = createGlow(body.color, 15, 0.35)
+        const sprite = createGlow(body.color, 16, 0.38)
         marker.add(sprite)
-        for (let i = 0; i < 24; i++) {
-          const dot = createGlow("#d8e6f4", 0.5 + random() * 0.6, 0.65)
-          dot.position.set(gaussian(random) * 5, gaussian(random) * 4, gaussian(random) * 5)
+        for (let i = 0; i < 28; i++) {
+          const dot = createGlow("#d8e6f4", 0.5 + random() * 0.7, 0.7)
+          dot.position.set(gaussian(random) * 5.5, gaussian(random) * 4.2, gaussian(random) * 5.5)
           marker.add(dot)
         }
       } else if (body.kind === "horizon") {
-        marker.add(createMarker("#f59e0b", 7, 0.8))
-        marker.add(createGlow("#e0a060", 18, 0.2))
+        marker.add(createMarker("#f59e0b", 6.5, 0.85))
+        marker.add(createGlow("#e0a060", 16, 0.22))
       } else {
-        marker.add(createMarker(body.color, 3.4, 0.9))
-        marker.add(createGlow(body.color, 8, 0.16))
+        marker.add(createMarker(body.color, 3.2, 0.9))
+        marker.add(createGlow(body.color, 7.5, 0.18))
       }
+
       group.add(marker)
       bodies.set(body.id, marker)
       labels.push({

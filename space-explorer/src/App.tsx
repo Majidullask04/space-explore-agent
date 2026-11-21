@@ -1,153 +1,58 @@
 import { useCallback, useRef, useState } from "react"
 import SceneCanvas from "./components/SceneCanvas"
-import TopTelemetryBar from "./components/HUD/TopTelemetryBar"
-import ScaleLadder from "./components/HUD/ScaleLadder"
-import Inspector from "./components/HUD/Inspector"
-import CompareDrawer from "./components/HUD/CompareDrawer"
-import AgentCommandDock from "./components/HUD/AgentCommandDock"
-import LayerControls from "./components/HUD/LayerControls"
+import MinimalHUD, { type HudInfo } from "./components/HUD/MinimalHUD"
+import FactCard from "./components/HUD/FactCard"
 import { useGeolocation } from "./hooks/useGeolocation"
-import { useLiveISS } from "./hooks/useLiveISS"
-import { requestAgentPlan } from "./agent/executor"
-import { MISSION_LIBRARY } from "./agent/types"
-import type { AgentResult, LayerState } from "./agent/types"
-import type { ScaleRegime } from "./data/catalog/types"
-import type { EngineInfo } from "./engine/CosmicEngine"
-import { findBody } from "./data/catalog"
-import { CosmicEngine } from "./engine/CosmicEngine"
+import { CosmicEngine, type EngineInfo } from "./engine/CosmicEngine"
+import { LOG_MIN } from "./engine/scaleController"
 
 export default function App() {
-  const { origin } = useGeolocation()
-  const { iss, refreshIss } = useLiveISS()
+  const { origin, geo } = useGeolocation()
   const engineRef = useRef<CosmicEngine | null>(null)
 
-  const [regime, setRegime] = useState<ScaleRegime>("surface")
-  const [targetId, setTargetId] = useState<string | null>(null)
-  const [distanceM, setDistanceM] = useState(0)
-  const [simClock, setSimClock] = useState("")
-  const [trace, setTrace] = useState<AgentResult[]>([])
-  const [busy, setBusy] = useState(false)
-  const [layers, setLayers] = useState<LayerState>({
-    orbits: true,
-    labels: true,
-    constellations: false,
-    spacecraft: true,
-    belts: true,
-    grid: false,
+  const [hudInfo, setHudInfo] = useState<HudInfo>({
+    logDist: LOG_MIN,
+    regionName: "Earth Surface",
+    distanceLabel: "100 m",
+    lightTimeLabel: "0.33 µs",
+    hudDim: false,
+    targetId: null,
   })
-  const [compare, setCompare] = useState<{ a: import("./data/catalog/types").CelestialBody; b: import("./data/catalog/types").CelestialBody } | null>(null)
 
-  const onReady = useCallback((engine: CosmicEngine) => {
-    engineRef.current = engine
-    engine.setOrigin({
-      lat: origin.lat,
-      lng: origin.lng,
-      label: "Manual",
-      source: "geolocation",
+  const [selectedBody, setSelectedBody] = useState<string | null>(null)
+
+  const onReady = useCallback(
+    (engine: CosmicEngine) => {
+      engineRef.current = engine
+      ;(window as unknown as { __engine?: CosmicEngine }).__engine = engine
+      engine.setOrigin({
+        lat: origin.lat,
+        lng: origin.lng,
+        label: geo.label || "Observer Location",
+        source: "geolocation",
+      })
+    },
+    [origin.lat, origin.lng, geo.label],
+  )
+
+  const handleFrame = useCallback((info: EngineInfo) => {
+    setHudInfo({
+      logDist: info.logDist,
+      regionName: info.regionName,
+      distanceLabel: info.distanceLabel,
+      lightTimeLabel: info.lightTimeLabel,
+      hudDim: info.hudDim,
+      targetId: info.targetId,
     })
   }, [])
 
-  const handleRegimeChange = useCallback((r: ScaleRegime) => {
-    setRegime(r)
-    setTargetId(null)
+  const handleScrubLogDist = useCallback((logDist: number) => {
+    engineRef.current?.setLogDist(logDist)
   }, [])
 
   const handleTargetFocus = useCallback((id: string | null) => {
-    setTargetId(id)
+    setSelectedBody(id)
   }, [])
-
-  const handleFrame = useCallback((info: EngineInfo) => {
-    setDistanceM(info.cameraDistance)
-    setSimClock(new Date(info.simDate).toLocaleTimeString("en-GB"))
-  }, [])
-
-  const setRegimeCmd = useCallback((r: ScaleRegime) => {
-    engineRef.current?.setRegime(r)
-  }, [])
-
-  const flyTo = useCallback((id: string, r: ScaleRegime) => {
-    engineRef.current?.flyToTarget(id, r, 1800)
-  }, [])
-
-  const handleAgentQuery = useCallback(
-    async (query: string) => {
-      setBusy(true)
-      const plan = await requestAgentPlan(query)
-      const results: AgentResult[] = []
-      for (const step of plan.steps) {
-        if (step.tool === "set_scale_regime") {
-          const r = String(step.args.regime) as ScaleRegime
-          if (Object.values(regimesList).includes(r)) {
-            setRegimeCmd(r)
-            results.push({ tool: "set_scale_regime", ok: true, summary: `Scale → ${r}`, args: step.args })
-          } else {
-            results.push({ tool: "set_scale_regime", ok: false, summary: `Unknown regime ${r}`, args: step.args })
-          }
-        } else if (step.tool === "fly_to_target") {
-          const id = String(step.args.targetId)
-          const r = String(step.args.regime) as ScaleRegime
-          flyTo(id, r)
-          results.push({ tool: "fly_to_target", ok: true, summary: `Flying to ${id}`, args: step.args })
-        } else if (step.tool === "run_mission_tour") {
-          const key = String(step.args.missionKey)
-          const mission = MISSION_LIBRARY[key]
-          if (mission) {
-            for (const stop of mission.stops) {
-              flyTo(stop.id, stop.regime)
-              await new Promise((res) => setTimeout(res, 1600))
-            }
-            results.push({ tool: "run_mission_tour", ok: true, summary: `Mission: ${mission.label}`, args: step.args })
-          }
-        } else if (step.tool === "compare_bodies") {
-          const a = findBody(String(step.args.a))
-          const b = findBody(String(step.args.b))
-          if (a && b) {
-            setCompare({ a, b })
-            results.push({ tool: "compare_bodies", ok: true, summary: `Comparing ${a.name} vs ${b.name}`, args: step.args })
-          }
-        } else if (step.tool === "fetch_live_iss") {
-          await refreshIss()
-          results.push({
-            tool: "fetch_live_iss",
-            ok: true,
-            summary: `ISS ${iss.lat?.toFixed(2)}°, ${iss.lng?.toFixed(2)}° · ${iss.altitudeKm} km · ${iss.velocityKmH} km/h`,
-            args: step.args,
-          })
-        } else if (step.tool === "toggle_layers") {
-          const key = String(step.args.layer) as keyof LayerState
-          setLayers((s) => ({ ...s, [key]: !s[key] }))
-          results.push({ tool: "toggle_layers", ok: true, summary: `Toggled ${key}`, args: step.args })
-        } else {
-          results.push({ tool: step.tool, ok: false, summary: "Not implemented", args: step.args })
-        }
-      }
-      setTrace((t) => [...t, ...results])
-      setBusy(false)
-    },
-    [flyTo, setRegimeCmd, refreshIss, iss.lat, iss.lng, iss.altitudeKm, iss.velocityKmH],
-  )
-
-  const handleMission = useCallback(
-    (missionKey: string) => {
-      const mission = MISSION_LIBRARY[missionKey]
-      if (!mission) return
-      const results: AgentResult[] = []
-      setBusy(true)
-      const run = async () => {
-        for (const stop of mission.stops) {
-          flyTo(stop.id, stop.regime)
-          await new Promise((res) => setTimeout(res, 1600))
-        }
-        results.push({ tool: "run_mission_tour", ok: true, summary: `Mission: ${mission.label}`, args: { missionKey } })
-        setTrace((t) => [...t, ...results])
-        setBusy(false)
-      }
-      void run()
-    },
-    [flyTo],
-  )
-
-  const targetBody = getTargetBody(targetId)
 
   return (
     <div className="app">
@@ -155,28 +60,10 @@ export default function App() {
         origin={origin}
         onReady={onReady}
         onFrame={handleFrame}
-        onRegimeChange={handleRegimeChange}
         onTargetFocus={handleTargetFocus}
       />
-      <LayerControls state={layers} onToggle={(k) => setLayers((s) => ({ ...s, [k]: !s[k] }))} />
-      <TopTelemetryBar regime={regime} targetName={targetBody?.name || ""} distanceM={distanceM} simClock={simClock} />
-      <ScaleLadder current={regime} onSelect={setRegimeCmd} />
-      {targetBody && <Inspector body={targetBody} onClose={() => setTargetId(null)} />}
-      {compare && <CompareDrawer a={compare.a} b={compare.b} onClose={() => setCompare(null)} />}
-      <AgentCommandDock onSubmit={handleAgentQuery} onMission={handleMission} trace={trace} busy={busy} />
+      <MinimalHUD info={hudInfo} onScrubLogDist={handleScrubLogDist} />
+      {selectedBody && <FactCard bodyId={selectedBody} onClose={() => setSelectedBody(null)} />}
     </div>
   )
-}
-
-const regimesList: ScaleRegime[] = [
-  "surface",
-  "orbit",
-  "solar_system",
-  "interstellar",
-  "milky_way",
-  "universe",
-]
-
-function getTargetBody(targetId: string | null): import("./data/catalog/types").CelestialBody | null {
-  return targetId ? findBody(targetId) ?? null : null
 }

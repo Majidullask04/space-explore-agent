@@ -1,5 +1,7 @@
 # dependencies
 node_modules/
+.cache/
+space-explorer/.cache/
 
 # builds
 dist/
