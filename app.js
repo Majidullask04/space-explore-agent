@@ -311,21 +311,33 @@
   };
 
   /* ---- the fly-by: panels scrolling past one pinned canvas ---- */
-  const state = { planet: "mercury" };
+  const state = { planet: "mercury", fading: false };
   const setActive = (id) => {
-    if (!PLANET_BY_ID[id] || state.planet === id) return;
-    state.planet = id;
-    const p = PLANET_BY_ID[id];
+    if (!PLANET_BY_ID[id] || state.planet === id || state.fading) return;
+    state.fading = true;
     const name = document.querySelector(".readout__name");
     const fig = document.querySelector(".readout__fig");
     const canvas = document.getElementById("c-planet");
-    if (name) name.textContent = p.name;
-    if (fig) {
-      fig.childNodes[0].textContent = p.light;
-      fig.setAttribute("aria-label", `${p.light} of light from the Sun to ${p.name}`);
-    }
-    if (canvas) canvas.setAttribute("aria-label", `The planet you are passing: ${p.name}, drawn in the theme’s light`);
-    drawPlanet(id);
+
+    name.style.transition = "opacity var(--dur-short) var(--ease-out)";
+    fig.style.transition = "opacity var(--dur-short) var(--ease-out)";
+    name.style.opacity = 0;
+    fig.style.opacity = 0;
+
+    setTimeout(() => {
+      state.planet = id;
+      const p = PLANET_BY_ID[id];
+      if (name) name.textContent = p.name;
+      if (fig) {
+        fig.childNodes[0].textContent = p.light;
+        fig.setAttribute("aria-label", `${p.light} of light from the Sun to ${p.name}`);
+      }
+      if (canvas) canvas.setAttribute("aria-label", `The planet you are passing: ${p.name}, drawn in the theme’s light`);
+      drawPlanet(id);
+      name.style.opacity = 1;
+      fig.style.opacity = 1;
+      state.fading = false;
+    }, 220);
   };
 
   const wire = () => {

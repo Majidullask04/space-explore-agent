@@ -57,6 +57,16 @@ figcaption, .split__visual figcaption { font-size: var(--text-sm); color: var(--
 
 .head-block { display: grid; gap: var(--space-md); margin-bottom: var(--space-2xl); max-width: 52ch; }
 
+/* sections reveal like the flight coming into view — one clean process */
+.sec { opacity: 0; }
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) and (min-width: 40rem) {
+    .sec { animation: sec-in var(--dur-long) var(--ease-out) both; animation-timeline: view(); animation-range: cover 10% cover 45%; }
+    @keyframes sec-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+  }
+}
+@supports not (animation-timeline: view()) { .sec { opacity: 1; } }
+
 /* facts */
 .facts { display: flex; flex-wrap: wrap; gap: var(--space-xl) var(--space-3xl); margin: var(--space-xl) 0 0; }
 .facts > div { border-top: var(--rule-hair) solid var(--color-rule); padding-top: var(--space-sm); min-width: 0; }
@@ -80,8 +90,8 @@ figcaption, .split__visual figcaption { font-size: var(--text-sm); color: var(--
 /* the one scroll pattern: panels arrive while the canvas holds */
 @supports (animation-timeline: view()) {
   @media (prefers-reduced-motion: no-preference) and (min-width: 40rem) {
-    .flyby__panels li { animation: panel-in linear both; animation-timeline: view(); animation-range: entry 0% entry 60%; }
-    @keyframes panel-in { from { opacity: 0.3; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+    .flyby__panels li { animation: panel-in var(--dur-long) var(--ease-out) both; animation-timeline: view(); animation-range: entry 10% entry 70%; }
+    @keyframes panel-in { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
   }
 }
 
