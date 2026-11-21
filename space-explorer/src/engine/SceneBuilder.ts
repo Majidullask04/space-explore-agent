@@ -1,5 +1,4 @@
 import * as THREE from "three"
-import type { CelestialBody } from "../data/catalog/types"
 import { SOLAR_SYSTEM_BODIES, INTERSTELLAR_BODIES, MILKY_WAY_BODIES, UNIVERSE_BODIES } from "../data/catalog"
 import { metersToWorld } from "./scaleController"
 import { planetTexture, dotTexture, sunTexture, starSpriteTexture } from "./textures"

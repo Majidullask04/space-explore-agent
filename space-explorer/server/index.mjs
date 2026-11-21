@@ -172,7 +172,7 @@ const server = http.createServer(async (req, res) => {
         const plan = await callLLM(query, provider, apiKey, model)
         return keep(200, plan)
       }
-    } catch (err) {
+    } catch {
       // fall through to deterministic fallback on any LLM error
     }
 

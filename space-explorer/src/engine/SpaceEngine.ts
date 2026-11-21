@@ -33,7 +33,8 @@ export class SpaceEngine {
   private builder = new SceneBuilder()
   private groups = new Map<ScaleRegime, BuiltGroup>()
   private targetId: string | null = null
-  private raf = 0  private clock = new THREE.Clock()
+  private raf = 0
+  private clock = new THREE.Clock()
   private reduced = false
   private raycaster = new THREE.Raycaster()
   private pointer = new THREE.Vector2()
@@ -247,7 +248,6 @@ export class SpaceEngine {
       this.focusWorld.copy(lookPos)
       if (t < 1) this.raf = requestAnimationFrame(step)
       else {
-        this.targetId = this.targetId
         this.cb.onTargetFocus?.(this.targetId)
       }
     }
