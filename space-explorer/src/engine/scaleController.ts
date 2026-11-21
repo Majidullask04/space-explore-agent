@@ -15,25 +15,25 @@ import { AU, LIGHT_YEAR } from "../data/catalog/units"
 export const WORLD_SCALE = 1
 
 export const REGIME_WORLD_RADIUS: Record<ScaleRegime, number> = {
-  earth_map: 120, // world units = ~120 km worth of surface
-  earth_orbit: 640,
+  surface: 120, // world units = ~120 km worth of surface
+  orbit: 640,
   solar_system: 6000,
   interstellar: 30000,
   milky_way: 90000,
-  observable_universe: 160000,
+  universe: 160000,
 }
 
 const REGIME_ORDER: ScaleRegime[] = [
-  "earth_map",
-  "earth_orbit",
+  "surface",
+  "orbit",
   "solar_system",
   "interstellar",
   "milky_way",
-  "observable_universe",
+  "universe",
 ]
 
 export class ScaleController {
-  current: ScaleRegime = "earth_map"
+  current: ScaleRegime = "surface"
   /** 0..1 progress across the whole journey, mapped to index. */
   progress = 0
 
@@ -92,12 +92,12 @@ export function metersToWorld(regime: ScaleRegime, meters: number): number {
       return (meters / LIGHT_YEAR) * 3
     case "milky_way":
       return (meters / LIGHT_YEAR) * 2.2
-    case "observable_universe":
+    case "universe":
       return (meters / LIGHT_YEAR) * 0.0009
-    case "earth_orbit":
-      return meters / 3e5
-    case "earth_map":
+    case "surface":
       return meters / 8e4
+    case "orbit":
+      return meters / 3e5
     default:
       return scale
   }

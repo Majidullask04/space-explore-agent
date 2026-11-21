@@ -8,6 +8,10 @@ import type { AgentPlan, AgentToolCall, AgentResult } from "./types"
  * the same route is expected from the hosting layer. If the network is down or
  * the server is unreachable, we transparently fall back to the local intent
  * router so the app never breaks.
+ *
+ * The local router is deterministic and key‑free: every tool call below is
+ * validated against the known catalog and regime set, so the app remains
+ * fully functional offline.
  */
 export async function requestAgentPlan(query: string): Promise<AgentPlan> {
   try {

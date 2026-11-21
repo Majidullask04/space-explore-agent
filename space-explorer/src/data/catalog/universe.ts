@@ -7,7 +7,7 @@ export const UNIVERSE: CelestialBody[] = [
   {
     id: "andromeda",
     name: "Andromeda (M31)",
-    regime: "observable_universe",
+    regime: "universe",
     distFromOriginM: 2.5e6 * LY,
     distFromEarthM: 2.5e6 * LY,
     profile: {
@@ -26,7 +26,7 @@ export const UNIVERSE: CelestialBody[] = [
   {
     id: "triangulum",
     name: "Triangulum (M33)",
-    regime: "observable_universe",
+    regime: "universe",
     distFromOriginM: 2.73e6 * LY,
     distFromEarthM: 2.73e6 * LY,
     profile: {
@@ -44,7 +44,7 @@ export const UNIVERSE: CelestialBody[] = [
   {
     id: "virgo-supercluster",
     name: "Virgo Supercluster",
-    regime: "observable_universe",
+    regime: "universe",
     distFromOriginM: 6.5e7 * LY,
     distFromEarthM: 6.5e7 * LY,
     profile: {
@@ -62,7 +62,7 @@ export const UNIVERSE: CelestialBody[] = [
   {
     id: "laniakea",
     name: "Laniakea Supercluster",
-    regime: "observable_universe",
+    regime: "universe",
     distFromOriginM: 2.5e8 * LY,
     distFromEarthM: 2.5e8 * LY,
     profile: {

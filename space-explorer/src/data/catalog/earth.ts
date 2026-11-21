@@ -38,7 +38,7 @@ export const EARTH_BODY: CelestialBody = {
 export const MOON_BODY: CelestialBody = {
   id: "moon",
   name: "Moon",
-  regime: "earth_orbit",
+  regime: "orbit",
   distFromOriginM: 3.844e8,
   distFromEarthM: 3.844e8,
   profile: {

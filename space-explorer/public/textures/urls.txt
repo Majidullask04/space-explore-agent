@@ -1,0 +1,15 @@
+earth_day.jpg https://www.solarsystemscope.com/textures/download/8k_earth_daymap.jpg
+earth_night.jpg https://www.solarsystemscope.com/textures/download/8k_earth_nightmap.jpg
+earth_clouds.jpg https://www.solarsystemscope.com/textures/download/8k_earth_clouds.jpg
+sun.jpg https://www.solarsystemscope.com/textures/download/8k_sun.jpg
+mercury.jpg https://www.solarsystemscope.com/textures/download/2k_mercury.jpg
+venus.jpg https://www.solarsystemscope.com/textures/download/2k_venus_surface.jpg
+venus_atmosphere.jpg https://www.solarsystemscope.com/textures/download/2k_venus_atmosphere.jpg
+mars.jpg https://www.solarsystemscope.com/textures/download/8k_mars.jpg
+jupiter.jpg https://www.solarsystemscope.com/textures/download/8k_jupiter.jpg
+saturn.jpg https://www.solarsystemscope.com/textures/download/8k_saturn.jpg
+saturn_ring_alpha.png https://www.solarsystemscope.com/textures/download/8k_saturn_ring_alpha.png
+uranus.jpg https://www.solarsystemscope.com/textures/download/2k_uranus.jpg
+neptune.jpg https://www.solarsystemscope.com/textures/download/2k_neptune.jpg
+moon.jpg https://www.solarsystemscope.com/textures/download/8k_moon.jpg
+milkyway.jpg https://www.solarsystemscope.com/textures/download/8k_stars_milky_way.jpg

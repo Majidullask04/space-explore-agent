@@ -11,16 +11,17 @@ import { useLiveISS } from "./hooks/useLiveISS"
 import { requestAgentPlan } from "./agent/executor"
 import { MISSION_LIBRARY } from "./agent/types"
 import type { AgentResult, LayerState } from "./agent/types"
-import type { ScaleRegime, CelestialBody } from "./data/catalog/types"
+import type { ScaleRegime } from "./data/catalog/types"
+import type { EngineInfo } from "./engine/CosmicEngine"
 import { findBody } from "./data/catalog"
-import { SpaceEngine } from "./engine/SpaceEngine"
+import { CosmicEngine } from "./engine/CosmicEngine"
 
 export default function App() {
   const { origin } = useGeolocation()
   const { iss, refreshIss } = useLiveISS()
-  const engineRef = useRef<SpaceEngine | null>(null)
+  const engineRef = useRef<CosmicEngine | null>(null)
 
-  const [regime, setRegime] = useState<ScaleRegime>("earth_map")
+  const [regime, setRegime] = useState<ScaleRegime>("surface")
   const [targetId, setTargetId] = useState<string | null>(null)
   const [distanceM, setDistanceM] = useState(0)
   const [simClock, setSimClock] = useState("")
@@ -30,15 +31,20 @@ export default function App() {
     orbits: true,
     labels: true,
     constellations: false,
-    habitableZone: false,
     spacecraft: true,
-    cosmicGrid: false,
+    belts: true,
+    grid: false,
   })
-  const [compare, setCompare] = useState<{ a: CelestialBody; b: CelestialBody } | null>(null)
+  const [compare, setCompare] = useState<{ a: import("./data/catalog/types").CelestialBody; b: import("./data/catalog/types").CelestialBody } | null>(null)
 
-  const onReady = useCallback((engine: SpaceEngine) => {
+  const onReady = useCallback((engine: CosmicEngine) => {
     engineRef.current = engine
-    engine.setOrigin(origin)
+    engine.setOrigin({
+      lat: origin.lat,
+      lng: origin.lng,
+      label: "Manual",
+      source: "geolocation",
+    })
   }, [])
 
   const handleRegimeChange = useCallback((r: ScaleRegime) => {
@@ -50,9 +56,9 @@ export default function App() {
     setTargetId(id)
   }, [])
 
-  const handleFrame = useCallback((info: { regime: ScaleRegime; targetId: string | null; distanceM: number }) => {
-    setDistanceM(info.distanceM)
-    setSimClock(new Date().toLocaleTimeString("en-GB"))
+  const handleFrame = useCallback((info: EngineInfo) => {
+    setDistanceM(info.cameraDistance)
+    setSimClock(new Date(info.simDate).toLocaleTimeString("en-GB"))
   }, [])
 
   const setRegimeCmd = useCallback((r: ScaleRegime) => {
@@ -162,15 +168,15 @@ export default function App() {
   )
 }
 
-const regimesList: string[] = [
-  "earth_map",
-  "earth_orbit",
+const regimesList: ScaleRegime[] = [
+  "surface",
+  "orbit",
   "solar_system",
   "interstellar",
   "milky_way",
-  "observable_universe",
+  "universe",
 ]
 
-function getTargetBody(targetId: string | null): CelestialBody | null {
+function getTargetBody(targetId: string | null): import("./data/catalog/types").CelestialBody | null {
   return targetId ? findBody(targetId) ?? null : null
 }

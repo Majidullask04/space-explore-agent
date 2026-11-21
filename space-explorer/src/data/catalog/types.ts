@@ -5,13 +5,24 @@
  */
 
 export type ScaleRegime =
-  | "earth_map"
-  | "earth_orbit"
+  | "surface"
+  | "orbit"
   | "solar_system"
   | "interstellar"
   | "milky_way"
-  | "observable_universe"
+  | "universe"
 
+/** User location origin on Earth. */
+export interface Origin {
+  lat: number
+  lng: number
+  label: string
+  source: "geolocation" | "manual" | "timezone" | "default"
+}
+
+/**
+ * A minimal frame that describes a body's orbit for Keplerian propagation.
+ */
 export interface SiteFrame {
   /** Orbital epoch (J2000) in days since J2000 epoch. */
   epoch: number
@@ -23,6 +34,7 @@ export interface SiteFrame {
   M0: number // mean anomaly at epoch (rad)
 }
 
+/** Per-body UI/profile data that the HUD and inspector consume. */
 export interface BodyProfile {
   radiusM: number
   massKg: number
@@ -34,6 +46,7 @@ export interface BodyProfile {
   emissive?: boolean
 }
 
+/** Full catalog entry — regime‑specific distance + marker info. */
 export interface CelestialBody {
   id: string
   name: string
@@ -50,6 +63,7 @@ export interface CelestialBody {
   description: string
 }
 
+/** Human‑readable regime definition (ladder labels, units). */
 export interface RegimeDef {
   id: ScaleRegime
   label: string

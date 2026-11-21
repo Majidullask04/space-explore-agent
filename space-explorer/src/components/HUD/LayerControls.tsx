@@ -10,9 +10,8 @@ const LAYERS: { key: keyof LayerState; label: string }[] = [
   { key: "orbits", label: "Orbits" },
   { key: "labels", label: "Labels" },
   { key: "constellations", label: "Constellations" },
-  { key: "habitableZone", label: "Habitable Zone" },
   { key: "spacecraft", label: "Spacecraft" },
-  { key: "cosmicGrid", label: "Cosmic Grid" },
+  { key: "grid", label: "Cosmic Grid" },
 ]
 
 export default function LayerControls({ state, onToggle }: Props) {

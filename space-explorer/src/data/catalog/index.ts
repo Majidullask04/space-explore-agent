@@ -8,7 +8,7 @@ import { EARTH_BODY, MOON_BODY } from "./earth"
 export { AU as AU_M, LIGHT_YEAR as LY_M } from "./units"
 export { REGIMES, REGIME_INDEX } from "./regimes"
 export { formatDistance, lightTravelLabel, lightTravelYears, type DistanceLabel, type DistanceUnit } from "./units"
-export type { CelestialBody, RegimeDef, ScaleRegime, BodyProfile, SiteFrame } from "./types"
+export type { CelestialBody, ScaleRegime, BodyProfile, SiteFrame } from "./types"
 
 export const SOLAR_SYSTEM_BODIES = SOLAR_SYSTEM
 export const INTERSTELLAR_BODIES = INTERSTELLAR
@@ -17,9 +17,9 @@ export const UNIVERSE_BODIES = UNIVERSE
 
 export function bodyForRegime(regime: ScaleRegime): CelestialBody[] {
   switch (regime) {
-    case "earth_map":
+    case "surface":
       return [EARTH_BODY]
-    case "earth_orbit":
+    case "orbit":
       return [EARTH_BODY, MOON_BODY]
     case "solar_system":
       return SOLAR_SYSTEM
@@ -27,7 +27,7 @@ export function bodyForRegime(regime: ScaleRegime): CelestialBody[] {
       return INTERSTELLAR
     case "milky_way":
       return MILKY_WAY
-    case "observable_universe":
+    case "universe":
       return UNIVERSE
     default:
       return []

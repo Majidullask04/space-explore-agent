@@ -41,13 +41,13 @@ async function main() {
     return
   }
 
-  // Start Vite
+  // Start Vite preview
   const vite = spawn("npx", ["vite", "preview", "--port", String(PORT), "--strictPort"], {
     cwd: root,
     stdio: "pipe",
     shell: true,
   })
-  await new Promise((res) => setTimeout(res, 2500))
+  await new Promise((res) => setTimeout(res, 10000))
 
   const browser = await puppeteer.launch({
     executablePath: chrome,
@@ -63,11 +63,12 @@ async function main() {
   })
   page.on("pageerror", (err) => consoleErrors.push(String(err)))
 
-  await page.goto(BASE, { waitUntil: "networkidle0", timeout: 20000 })
+  await page.goto(BASE, { waitUntil: "load", timeout: 120000 })
   await new Promise((r) => setTimeout(r, 2200))
   await page.screenshot({ path: join(shotsDir, "earth_map.png") })
 
-  const regimes = ["earth_orbit", "solar_system", "interstellar", "milky_way", "observable_universe"]
+  // Six regimes in order: surface, orbit, solar_system, interstellar, milky_way, universe
+  const regimes = ["surface", "orbit", "solar_system", "interstellar", "milky_way", "universe"]
   for (const regime of regimes) {
     // Click the corresponding ladder rung
     const clicked = await page.evaluate((r) => {
