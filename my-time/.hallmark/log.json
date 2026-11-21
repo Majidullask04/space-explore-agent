@@ -1,0 +1,23 @@
+[
+ {
+  "shape": "scroll-driven cinematic story: fixed WebGL cosmos stage under 26 full-viewport beats in six chapters",
+  "theme": "custom",
+  "idea": "a scroll-driven flight from the darkness of space to a living Earth, told in one voice, ending in a kept promise to yourself",
+  "vibe": "cosmic, hushed, vast, personal, cinematic, patient",
+  "hero": "the cosmos itself: Before everything else… over a faint Earth, one screen",
+  "nav": "wordmark + chapter rail + sound control",
+  "footer": "none, the story ends on action",
+  "imagery": "NASA-derived Earth maps (three.js repo, MIT) + cloud map (turban/webgl-earth), rendered live in three.js; no photographs",
+  "photos": [],
+  "signature": "the Earth itself: distant spark to held world to sunrise, driven by scroll",
+  "sections": "6 chapters, 26 beats, reflection modal, replay",
+  "fingerprint": "canvas-stage, beat-scroll, chapter-rail, webaudio-drone, reflection-localstorage",
+  "waived": [
+   "59",
+   "79"
+  ],
+  "prompt": "MY TIME immersive cinematic storytelling website",
+  "date": "2026-11-14",
+  "mode": "build"
+ }
+]

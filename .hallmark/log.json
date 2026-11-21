@@ -1,0 +1,22 @@
+[
+ {
+  "shape": "scroll journey",
+  "theme": "Midnight (deal 1/3)",
+  "axes": "dark/grotesk-sans/cool",
+  "hero": "Poster, full-bleed canvas starfield with the flight diagrammed in it, content low and left",
+  "nav": "edge-aligned, wordmark and three section links",
+  "footer": "colophon, wordmark over the sources line",
+  "imagery": "none, the canvas journey is the product",
+  "photos": [],
+  "entry": "a flight from the Sun to the galaxy edge: sun section, eight-planet pinned fly-by with light-time figures, moon figures, nebula band, Sagittarius A split, Milky Way statement",
+  "fingerprint": "poster-canvas-hero, pinned-diptych-journey, figures-row, band-bloom, split-mirror, statement-close",
+  "sections": "Hero, First light, Eight worlds, One step out, A nursery of stars, Sagittarius A, You live here, colophon",
+  "signature": "the planet fly-by: eight panels scrolling past one pinned canvas, each world at relative size with its light-time",
+  "waived": [
+   "81"
+  ],
+  "prompt": "interactive cinematic journey through space: fly from the Sun past every planet, the Moon, nebulae and a black hole, out into the Milky Way",
+  "date": "2026-11-14",
+  "mode": "build"
+ }
+]

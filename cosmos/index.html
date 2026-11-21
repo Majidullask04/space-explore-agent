@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>COSMOS — Explore the Universe</title>
+<meta name="description" content="A personal 3D universe simulator: fly freely through the solar system, nebulae, a black hole and the Milky Way.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Mona+Sans:wdth,wght@100,400;100,500;100,700;125,300&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #eef3ff;
+    --ink-dim: #9aa8c7;
+    --paper: #05070f;
+    --panel: rgba(8, 12, 24, 0.82);
+    --edge: rgba(150, 180, 235, 0.16);
+    --accent: #7cc4ff;
+    --accent-ink: #04101d;
+    --warn: #ffb37c;
+    font-size: 16px;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; overflow: hidden; background: var(--paper); }
+  body { font-family: "Mona Sans", ui-sans-serif, system-ui, sans-serif; color: var(--ink); -webkit-font-smoothing: antialiased; }
+  #scene { position: fixed; inset: 0; }
+  #scene canvas { display: block; width: 100%; height: 100%; }
+  button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; }
+  .hud { position: fixed; z-index: 10; user-select: none; }
+
+  /* top chrome */
+  #brand { top: 0; left: 0; right: 0; display: flex; align-items: center; justify-content: space-between; padding: 18px 24px; pointer-events: none; }
+  #brand > * { pointer-events: auto; }
+  #wordmark { font-weight: 300; font-stretch: 125%; letter-spacing: -0.01em; font-size: 1.5rem; color: var(--ink); text-decoration: none; }
+  #wordmark b { font-weight: 700; font-stretch: 100%; }
+  #brand nav { display: flex; gap: 8px; }
+  .chip { border: 1px solid var(--edge); background: var(--panel); color: var(--ink-dim); border-radius: 999px; padding: 8px 14px; font-size: 0.8125rem; font-weight: 500; transition: color 0.2s, border-color 0.2s; }
+  .chip:hover { color: var(--ink); border-color: rgba(150, 180, 235, 0.4); }
+  .chip.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .chip:focus-visible, .dest button:focus-visible, .panel button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* reticle + hover label */
+  #reticle { top: 50%; left: 50%; translate: -50% -50%; width: 6px; height: 6px; border: 1px solid rgba(238, 243, 255, 0.55); border-radius: 50%; pointer-events: none; mix-blend-mode: screen; }
+  #hover-label { transform: translate(14px, 14px); pointer-events: none; font-size: 0.8125rem; font-weight: 500; color: var(--ink); background: var(--panel); border: 1px solid var(--edge); border-radius: 8px; padding: 6px 10px; display: none; }
+
+  /* bottom-left telemetry */
+  #telemetry { left: 24px; bottom: 24px; display: grid; gap: 4px; font-size: 0.8125rem; color: var(--ink-dim); font-variant-numeric: tabular-nums; }
+  #telemetry strong { color: var(--ink); font-weight: 500; }
+  #speed-line b { color: var(--accent); font-weight: 700; }
+
+  /* destinations */
+  #destinations { right: 24px; bottom: 24px; display: grid; gap: 6px; justify-items: end; }
+  #destinations .dest { display: grid; gap: 4px; max-height: 40vh; overflow-y: auto; scrollbar-width: thin; }
+  .dest button { text-align: right; font-size: 0.8125rem; font-weight: 500; color: var(--ink-dim); padding: 6px 12px; border-radius: 10px; background: var(--panel); border: 1px solid var(--edge); transition: color 0.15s, background 0.15s; }
+  .dest button:hover { color: var(--ink); background: rgba(124, 196, 255, 0.08); }
+  .dest button.here { color: var(--accent); }
+  .dest button small { color: var(--ink-dim); font-weight: 400; display: block; font-size: 0.6875rem; }
+
+  /* the encyclopedia panel */
+  #panel { top: 0; right: 0; bottom: 0; width: min(400px, 92vw); background: var(--panel); border-left: 1px solid var(--edge); backdrop-filter: blur(14px); transform: translateX(105%); transition: transform 0.45s cubic-bezier(0.16, 1, 0.3, 1); display: grid; grid-template-rows: auto 1fr; }
+  #panel.open { transform: none; }
+  #panel header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 22px 22px 14px; }
+  #panel-kind { font-size: 0.75rem; font-weight: 500; color: var(--accent); margin-bottom: 6px; }
+  #panel-name { font-weight: 300; font-stretch: 125%; font-size: 2rem; line-height: 1.05; letter-spacing: -0.01em; }
+  #panel-close { color: var(--ink-dim); font-size: 1.25rem; line-height: 1; padding: 6px 8px; border-radius: 8px; }
+  #panel-close:hover { color: var(--ink); background: rgba(124, 196, 255, 0.08); }
+  #panel-body { overflow-y: auto; padding: 0 22px 22px; scrollbar-width: thin; }
+  #panel-intro { color: var(--ink-dim); line-height: 1.55; font-size: 0.9375rem; margin-bottom: 16px; }
+  .data-grid { display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid var(--edge); }
+  .data-grid > div { padding: 10px 12px 10px 0; border-bottom: 1px solid var(--edge); }
+  .data-grid dt { font-size: 0.71875rem; font-weight: 500; color: var(--ink-dim); margin-bottom: 3px; }
+  .data-grid dd { font-size: 0.9375rem; font-weight: 500; font-variant-numeric: tabular-nums; }
+  #panel h4 { font-size: 0.75rem; font-weight: 700; color: var(--accent); margin: 18px 0 8px; }
+  #panel ul { list-style: none; display: grid; gap: 8px; }
+  #panel li { font-size: 0.875rem; line-height: 1.5; color: var(--ink); padding-left: 14px; position: relative; }
+  #panel li::before { content: ""; position: absolute; left: 0; top: 0.55em; width: 5px; height: 5px; border-radius: 50%; background: rgba(124, 196, 255, 0.6); }
+  #panel li span { color: var(--ink-dim); }
+
+  /* map */
+  #map-wrap { inset: 0; display: none; align-items: center; justify-content: center; background: rgba(4, 6, 13, 0.7); }
+  #map-wrap.open { display: flex; }
+  #map-card { width: min(860px, 94vw); border: 1px solid var(--edge); background: var(--panel); border-radius: 16px; padding: 16px; }
+  #map-card header { display: flex; justify-content: space-between; align-items: center; padding: 2px 6px 12px; }
+  #map-card h3 { font-weight: 300; font-stretch: 125%; font-size: 1.25rem; }
+  #map { width: 100%; aspect-ratio: 16 / 9; border-radius: 8px; background: rgba(4, 6, 13, 0.6); cursor: crosshair; }
+
+  /* help + pause */
+  #help, #paused { inset: 0; display: none; align-items: center; justify-content: center; background: rgba(4, 6, 13, 0.72); z-index: 20; }
+  #help.open, #paused.open { display: flex; }
+  #help-card, #paused-card { width: min(560px, 92vw); border: 1px solid var(--edge); background: var(--panel); border-radius: 16px; padding: 26px 28px; }
+  #help-card h3, #paused-card h3 { font-weight: 300; font-stretch: 125%; font-size: 1.6rem; margin-bottom: 14px; }
+  .keys { display: grid; grid-template-columns: auto 1fr; gap: 7px 16px; align-items: baseline; }
+  .keys kbd { font-family: inherit; font-size: 0.75rem; font-weight: 700; border: 1px solid var(--edge); border-bottom-width: 2px; border-radius: 6px; padding: 2px 7px; color: var(--ink); background: rgba(124, 196, 255, 0.06); white-space: nowrap; }
+  .keys span { font-size: 0.875rem; color: var(--ink-dim); }
+  #paused-card p { color: var(--ink-dim); font-size: 0.9375rem; line-height: 1.55; margin-bottom: 16px; }
+
+  /* toast hint */
+  #hint { left: 50%; bottom: 92px; translate: -50% 0; background: var(--panel); border: 1px solid var(--edge); border-radius: 999px; padding: 10px 18px; font-size: 0.8125rem; color: var(--ink-dim); pointer-events: none; transition: opacity 0.6s; }
+  #hint b { color: var(--ink); font-weight: 500; }
+  #hint.gone { opacity: 0; }
+
+  /* loading */
+  #loader { inset: 0; z-index: 30; background: var(--paper); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; transition: opacity 0.8s; }
+  #loader.done { opacity: 0; pointer-events: none; }
+  #loader .mark { font-weight: 300; font-stretch: 125%; font-size: clamp(2.5rem, 7vw, 4.5rem); letter-spacing: 0.02em; }
+  #loader .mark b { font-weight: 700; font-stretch: 100%; }
+  #loader p { color: var(--ink-dim); font-size: 0.875rem; }
+  #loader .bar { width: 220px; height: 2px; background: rgba(150, 180, 235, 0.15); border-radius: 2px; overflow: hidden; }
+  #loader .bar i { display: block; height: 100%; width: 0%; background: var(--accent); transition: width 0.3s; }
+
+  /* mobile controls */
+  #touchpad { left: 0; right: 0; bottom: 0; display: none; justify-content: space-between; padding: 0 18px 18px; pointer-events: none; }
+  #touchpad > div { display: flex; gap: 10px; pointer-events: auto; }
+  .tbtn { width: 58px; height: 58px; border-radius: 50%; border: 1px solid var(--edge); background: var(--panel); color: var(--ink-dim); font-size: 1.25rem; display: flex; align-items: center; justify-content: center; }
+  .tbtn:active { background: var(--accent); color: var(--accent-ink); }
+  @media (pointer: coarse) { #touchpad { display: flex; } #destinations .dest { max-height: 28vh; } }
+  @media (max-width: 640px) {
+    #brand { padding: 12px 14px; }
+    #wordmark { font-size: 1.15rem; }
+    #telemetry { left: 14px; bottom: 92px; font-size: 0.75rem; }
+    #destinations { right: 14px; bottom: 92px; }
+    #hint { display: none; }
+  }
+</style>
+</head>
+<body>
+  <div id="scene" aria-label="The 3D universe"></div>
+
+  <header id="brand" class="hud">
+    <a id="wordmark" href="#" aria-label="COSMOS home">COS<b>MOS</b></a>
+    <nav aria-label="Modes and overlays">
+      <button class="chip" id="mode-btn" title="Toggle ship / explore (X)">Ship mode</button>
+      <button class="chip" id="map-btn" title="Universe map (M)">Map</button>
+      <button class="chip" id="pause-btn" title="Pause time (P)">Pause</button>
+      <button class="chip" id="help-btn" title="Controls (H)">Help</button>
+    </nav>
+  </header>
+
+  <div id="reticle" class="hud" aria-hidden="true"></div>
+  <div id="hover-label" class="hud" aria-hidden="true"></div>
+
+  <div id="telemetry" class="hud" aria-live="off">
+    <span id="speed-line"><b>0</b> × light-speed</span>
+    <span id="pos-line">at <strong>0.0 AU</strong> from the Sun</span>
+    <span id="clock-line">time × <strong>1.0</strong></span>
+  </div>
+
+  <nav id="destinations" class="hud" aria-label="Destinations">
+    <div class="dest" id="dest-list"></div>
+  </nav>
+
+  <aside id="panel" class="hud" aria-label="Object encyclopedia">
+    <header>
+      <div>
+        <div id="panel-kind">Planet</div>
+        <h2 id="panel-name">Earth</h2>
+      </div>
+      <button id="panel-close" aria-label="Close panel">✕</button>
+    </header>
+    <div id="panel-body">
+      <p id="panel-intro"></p>
+      <dl class="data-grid" id="panel-data"></dl>
+      <div id="panel-facts-wrap"><h4>Worth knowing</h4><ul id="panel-facts"></ul></div>
+      <div id="panel-missions-wrap"><h4>Missions</h4><ul id="panel-missions"></ul></div>
+    </div>
+  </aside>
+
+  <div id="map-wrap" class="hud">
+    <div id="map-card">
+      <header>
+        <h3>Universe map</h3>
+        <button class="chip" id="map-close">Close</button>
+      </header>
+      <canvas id="map" width="1280" height="720" aria-label="Top-down map of the solar system and deep-sky destinations. Click a dot to travel there."></canvas>
+    </div>
+  </div>
+
+  <div id="help" class="hud">
+    <div id="help-card">
+      <h3>Flying COSMOS</h3>
+      <div class="keys">
+        <kbd>Drag</kbd><span>look around</span>
+        <kbd>W A S D</kbd><span>forward, left, back, right</span>
+        <kbd>R / F</kbd><span>rise, sink</span>
+        <kbd>Q / E</kbd><span>roll the view</span>
+        <kbd>Shift</kbd><span>afterburner (hold)</span>
+        <kbd>Scroll</kbd><span>push forward / pull back</span>
+        <kbd>Click a world</kbd><span>fly to it and open its story</span>
+        <kbd>Space</kbd><span>full stop</span>
+        <kbd>X</kbd><span>ship / explore camera</span>
+        <kbd>M</kbd><span>universe map</span>
+        <kbd>, / .</kbd><span>slow, speed up time</span>
+        <kbd>P</kbd><span>pause time</span>
+        <kbd>H / Esc</kbd><span>this card / close anything</span>
+      </div>
+    </div>
+  </div>
+
+  <div id="paused" class="hud">
+    <div id="paused-card">
+      <h3>Time is paused</h3>
+      <p>Orbits and rotations are frozen. You can still fly freely and read every world. Press P, or the button below, to let the planets run again.</p>
+      <button class="chip" id="resume-btn">Resume time</button>
+    </div>
+  </div>
+
+  <div id="hint" class="hud"><b>Drag</b> to look · <b>W A S D</b> to fly · <b>click any world</b> to visit it</div>
+
+  <div id="touchpad" class="hud">
+    <div>
+      <button class="tbtn" id="t-brake" aria-label="Full stop">■</button>
+      <button class="tbtn" id="t-back" aria-label="Fly backward">↓</button>
+    </div>
+    <div>
+      <button class="tbtn" id="t-boost" aria-label="Afterburner">⇈</button>
+      <button class="tbtn" id="t-fwd" aria-label="Fly forward">↑</button>
+    </div>
+  </div>
+
+  <div id="loader">
+    <div class="mark">COS<b>MOS</b></div>
+    <div class="bar"><i id="loader-bar"></i></div>
+    <p id="loader-msg">lighting the stars…</p>
+  </div>
+
+  <script src="./three.min.js"></script>
+  <script src="./cosmos.js"></script>
+</body>
+</html>

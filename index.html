@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Outward: a flight from the Sun to the galaxy’s edge</title>
+  <meta name="description" content="A scroll-driven flight past the Sun, every planet, the Moon, a nebula and a black hole, out into the Milky Way.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Mona+Sans:wdth,wght@100,400;100,500;125,300&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body id="top">
+  <header class="nav container">
+    <a class="wordmark" href="#top">Outward</a>
+    <nav aria-label="Sections">
+      <a href="cosmos/index.html">Launch COSMOS</a>
+      <a href="#sun">The Sun</a>
+      <a href="#worlds">Eight worlds</a>
+      <a href="#the-dark">The black hole</a>
+    </nav>
+  </header>
+  <main>
+    <section class="hero" aria-label="The flight, about to begin">
+      <canvas id="sky" aria-hidden="true"></canvas>
+      <div class="hero-inner container settle">
+        <h1>Outward, from the Sun.</h1>
+        <p class="lead">A flight past every planet, the Moon, and out to the dark.</p>
+        <div class="actions">
+          <a class="btn btn--primary" href="cosmos/index.html">Launch COSMOS: fly the universe</a>
+          <a class="btn btn--secondary" href="#sun">Or read the flight</a>
+        </div>
+      </div>
+    </section>
+
+    <section id="sun" class="sec sec--sun">
+      <div class="container split">
+        <div class="split__text">
+          <h2>First light</h2>
+          <p class="lead">Everything you are about to pass is lit by it.</p>
+          <dl class="facts">
+            <div>
+              <dt>Across</dt>
+              <dd class="fig">1,392,000<span> km</span></dd>
+            </div>
+            <div>
+              <dt>Surface</dt>
+              <dd class="fig">5,500<span> °C</span></dd>
+            </div>
+          </dl>
+        </div>
+        <figure class="split__visual">
+          <canvas id="c-sun" role="img" aria-label="Diagram of the Sun: a bright disc held inside three hairline corona rings"></canvas>
+          <figcaption>The system’s furnace, and its clock.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section id="worlds" class="sec sec--worlds">
+      <div class="container">
+        <header class="head-block">
+          <h2>Eight worlds, one timetable</h2>
+          <p class="lead">Every figure on the left is the Sun’s own light arriving.</p>
+        </header>
+        <div class="flyby">
+          <div class="flyby__sticky">
+            <canvas id="c-planet" role="img" aria-label="The planet you are passing, drawn in the theme’s light"></canvas>
+            <div class="readout">
+              <p class="readout__name" role="status">Mercury</p>
+              <p class="readout__fig fig">3 min 14 s<span class="readout__unit">of light from the Sun</span></p>
+            </div>
+          </div>
+          <ol class="flyby__panels">
+            <li data-planet="mercury">
+              <h3>Mercury</h3>
+              <p>Closest in. A world of iron and sun-scorch.</p>
+            </li>
+            <li data-planet="venus">
+              <h3>Venus</h3>
+              <p>The hottest surface in the system, under permanent cloud.</p>
+            </li>
+            <li data-planet="earth">
+              <h3>Earth</h3>
+              <p>The only known harbour of anything alive.</p>
+            </li>
+            <li data-planet="mars">
+              <h3>Mars</h3>
+              <p>Rust-red, cold, and once wet.</p>
+            </li>
+            <li data-planet="jupiter">
+              <h3>Jupiter</h3>
+              <p>Bigger than every other planet combined.</p>
+            </li>
+            <li data-planet="saturn">
+              <h3>Saturn</h3>
+              <p>Rings of ice, thin enough to disappear.</p>
+            </li>
+            <li data-planet="uranus">
+              <h3>Uranus</h3>
+              <p>It rolls around the Sun on its side.</p>
+            </li>
+            <li data-planet="neptune">
+              <h3>Neptune</h3>
+              <p>The far out, found by mathematics first.</p>
+            </li>
+          </ol>
+        </div>
+      </div>
+    </section>
+
+    <section id="moon" class="sec sec--moon">
+      <div class="container">
+        <header class="head-block">
+          <h2>One step out</h2>
+          <p class="lead">Earth’s companion, seen whole.</p>
+        </header>
+        <dl class="figures">
+          <div>
+            <dt>Distance from Earth</dt>
+            <dd class="fig">384,400<span> km</span></dd>
+          </div>
+          <div>
+            <dt>Diameter</dt>
+            <dd class="fig">3,475<span> km</span></dd>
+          </div>
+          <div>
+            <dt>Its light arrives</dt>
+            <dd class="fig">1.3<span> s</span></dd>
+          </div>
+        </dl>
+      </div>
+    </section>
+
+    <section id="nebula" class="band">
+      <div class="band__bloom" aria-hidden="true"></div>
+      <div class="container band__inner">
+        <h2>A nursery of stars</h2>
+        <p class="lead">The Orion Nebula, where new suns condense out of the cloud. One day, one of them lights its own worlds.</p>
+        <dl class="facts facts--inline">
+          <div>
+            <dt>Distance</dt>
+            <dd class="fig">1,344<span> light-years</span></dd>
+          </div>
+        </dl>
+      </div>
+    </section>
+
+    <section id="the-dark" class="sec sec--dark">
+      <div class="container split split--mirror">
+        <figure class="split__visual">
+          <div class="well well--raised">
+            <canvas id="c-hole" role="img" aria-label="Diagram of the black hole Sagittarius A star: a dark disc inside a thin bright accretion ring"></canvas>
+          </div>
+          <figcaption>The event horizon, and the light that survives just outside it.</figcaption>
+        </figure>
+        <div class="split__text">
+          <h2>Sagittarius A*</h2>
+          <p class="lead">Four million Suns folded into one dark point, 26,000 light-years from here.</p>
+          <p>In 2019 we photographed another one, 55 million light-years out. The image took four years of data.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="galaxy" class="sec sec--galaxy">
+      <div class="galaxy__bloom" aria-hidden="true"></div>
+      <div class="container sec--galaxy__inner">
+        <p class="statement">You live here.</p>
+        <p class="lead">Among at least a hundred billion stars in the Milky Way, one of them is ours.</p>
+        <dl class="facts facts--inline">
+          <div>
+            <dt>Across</dt>
+            <dd class="fig">100,000<span> light-years</span></dd>
+          </div>
+        </dl>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="container footer__inner">
+      <p class="wordmark">Outward</p>
+      <p class="footer__meta">Distances and figures from NASA fact sheets; light-times rounded to the nearest second. Sizes in the fly-by are compressed to fit one frame.</p>
+      <p class="footer__next"><a href="cosmos/index.html">Continue into COSMOS, the free-flight simulator</a></p>
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
