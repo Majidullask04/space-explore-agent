@@ -22,6 +22,12 @@ export default function SceneCanvas({
   const hostRef = useRef<HTMLDivElement>(null)
   const engineRef = useRef<CosmicEngine | null>(null)
 
+  const callbacksRef = useRef({ onReady, onFrame, onRegimeChange, onTargetFocus })
+  useEffect(() => {
+    callbacksRef.current = { onReady, onFrame, onRegimeChange, onTargetFocus }
+  })
+
+  // Initialize engine once on mount
   useEffect(() => {
     const host = hostRef.current
     if (!host) return
@@ -40,13 +46,13 @@ export default function SceneCanvas({
     }
 
     const engine = new CosmicEngine(host, engineOptions, {
-      onFrame: (info) => onFrame?.(info),
-      onRegimeChange: (r) => onRegimeChange?.(r),
-      onTargetFocus: (id) => onTargetFocus?.(id),
+      onFrame: (info) => callbacksRef.current.onFrame?.(info),
+      onRegimeChange: (r) => callbacksRef.current.onRegimeChange?.(r),
+      onTargetFocus: (id) => callbacksRef.current.onTargetFocus?.(id),
     })
 
     engineRef.current = engine
-    onReady?.(engine)
+    callbacksRef.current.onReady?.(engine)
 
     // Load Hipparcos/HYG stars in background
     loadStars()
@@ -61,7 +67,19 @@ export default function SceneCanvas({
       engine.dispose()
       engineRef.current = null
     }
-  }, [origin.lat, origin.lng, onReady, onFrame, onRegimeChange, onTargetFocus])
+  }, []) // Mount once — never tear down WebGL on state changes
+
+  // Update origin dynamically without recreating engine
+  useEffect(() => {
+    if (engineRef.current) {
+      engineRef.current.setOrigin({
+        lat: origin.lat,
+        lng: origin.lng,
+        label: "Observer Location",
+        source: "geolocation",
+      })
+    }
+  }, [origin.lat, origin.lng])
 
   return <div ref={hostRef} className="scene-canvas" style={{ position: "absolute", inset: 0 }} />
 }

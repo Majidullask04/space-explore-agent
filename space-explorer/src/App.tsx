@@ -6,6 +6,12 @@ import { useGeolocation } from "./hooks/useGeolocation"
 import { CosmicEngine, type EngineInfo } from "./engine/CosmicEngine"
 import { LOG_MIN } from "./engine/scaleController"
 
+declare global {
+  interface Window {
+    __engine?: CosmicEngine
+  }
+}
+
 export default function App() {
   const { origin, geo } = useGeolocation()
   const engineRef = useRef<CosmicEngine | null>(null)
@@ -24,7 +30,7 @@ export default function App() {
   const onReady = useCallback(
     (engine: CosmicEngine) => {
       engineRef.current = engine
-      ;(window as unknown as { __engine?: CosmicEngine }).__engine = engine
+      window.__engine = engine
       engine.setOrigin({
         lat: origin.lat,
         lng: origin.lng,
