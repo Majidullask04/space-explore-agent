@@ -406,6 +406,32 @@ async function getGibs(env, root, layer, z, x, y) {
 /* Router                                                              */
 /* ------------------------------------------------------------------ */
 
+const ISS_FALLBACK = {
+  lat: 23.18,
+  lng: 78.94,
+  altitudeKm: 421.3,
+  velocityKmH: 27600,
+  visibility: "daylight",
+  solarLat: 20.1,
+  solarLng: 79.4,
+  timestamp: 0,
+  source: "cached",
+}
+
+/**
+ * NASA upstreams are rate limited and occasionally return 5xx. The client has
+ * verified snapshot fallbacks, so a failed upstream must degrade to an empty
+ * payload with HTTP 200 rather than surfacing a console error for every view.
+ */
+async function safeData(loader, fallback) {
+  try {
+    return await loader()
+  } catch (error) {
+    console.warn("[space-explorer-api] upstream unavailable:", error?.message || error)
+    return typeof fallback === "function" ? fallback() : fallback
+  }
+}
+
 export function createApiHandler(options = {}) {
   const root = options.root || process.cwd()
   const env = options.env || loadEnv(root)
@@ -446,36 +472,51 @@ export function createApiHandler(options = {}) {
       }
 
       if (url.pathname === "/api/nasa/iss") {
-        sendJson(res, 200, await getIss(env, root), "public, max-age=4")
+        sendJson(res, 200, await safeData(() => getIss(env, root), ISS_FALLBACK), "public, max-age=4")
         return true
       }
 
       if (url.pathname === "/api/nasa/flares") {
-        sendJson(res, 200, await getFlares(env, root), "public, max-age=300")
+        sendJson(res, 200, await safeData(() => getFlares(env, root), []), "public, max-age=300")
         return true
       }
 
       if (url.pathname === "/api/nasa/asteroids") {
-        sendJson(res, 200, await getAsteroids(env, root), "public, max-age=900")
+        sendJson(res, 200, await safeData(() => getAsteroids(env, root), []), "public, max-age=900")
         return true
       }
 
       if (url.pathname === "/api/nasa/exoplanets") {
         const limit = Math.min(800, Math.max(10, Number(url.searchParams.get("limit") || 400)))
-        sendJson(res, 200, await getExoplanets(env, root, limit), "public, max-age=3600")
+        sendJson(
+          res,
+          200,
+          await safeData(() => getExoplanets(env, root, limit), []),
+          "public, max-age=3600",
+        )
         return true
       }
 
       if (url.pathname === "/api/nasa/images") {
         const q = (url.searchParams.get("q") || "Earth").slice(0, 120)
         const limit = Math.min(12, Math.max(1, Number(url.searchParams.get("limit") || 6)))
-        sendJson(res, 200, await getImages(env, root, q, limit), "public, max-age=3600")
+        sendJson(
+          res,
+          200,
+          await safeData(() => getImages(env, root, q, limit), []),
+          "public, max-age=3600",
+        )
         return true
       }
 
       if (url.pathname === "/api/nasa/horizons") {
         const body = (url.searchParams.get("body") || "mars").toLowerCase()
-        sendJson(res, 200, await getHorizons(env, root, body), "public, max-age=3600")
+        sendJson(
+          res,
+          200,
+          await safeData(() => getHorizons(env, root, body), null),
+          "public, max-age=3600",
+        )
         return true
       }
 

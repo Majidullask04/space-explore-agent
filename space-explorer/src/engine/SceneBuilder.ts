@@ -15,6 +15,8 @@ import {
   eclipticToScene,
   equatorialToGalactic,
   galacticPosition,
+  moonDistanceKm,
+  moonGeoAu,
   planetOrbitAu,
   planetPositionAu,
   raDecToVector,
@@ -30,11 +32,12 @@ import {
 } from "./earthMaterial"
 import {
   buildGibsMosaic,
-  cmbTexture,
   cropTextureRegion,
   galaxyTexture,
   ringAlphaTexture,
+  surfaceRegion,
   texture,
+  type SurfaceRegion,
 } from "./textures"
 import {
   circlePoints,
@@ -45,6 +48,7 @@ import {
   createOriginMarker,
   createStarPoints,
   gaussian,
+  updateStarPoints,
   geoToSphere,
   logDistance,
   seededRandom,
@@ -110,7 +114,7 @@ const UNIVERSE_MIN_LY = 1e6
 
 function visualPlanetRadius(id: string): number {
   const km = PLANET_ELEMENTS[id]?.radiusKm ?? 6378
-  return 1.35 + Math.log10(km / 1000) * 1.25
+  return 2.0 + Math.log10(km / 1000) * 1.8
 }
 
 function labelFor(
@@ -141,21 +145,25 @@ function registerBody(
   bodies.set(id, object)
 }
 
-function surfaceBounds(origin: Origin) {
-  const spanLat = 9
-  const spanLon = 14
-  return {
-    latMin: Math.max(-82, origin.lat - spanLat / 2),
-    latMax: Math.min(82, origin.lat + spanLat / 2),
-    lonMin: Math.max(-180, origin.lng - spanLon / 2),
-    lonMax: Math.min(180, origin.lng + spanLon / 2),
-  }
+const SURFACE_PLATE_UNITS = 1300
+const METERS_PER_DEG_LON = 111_320
+
+/** Real ground extent of the fixed regional mosaic, used for honest readouts. */
+function surfacePlate(region: SurfaceRegion): { widthM: number; widthUnits: number; heightUnits: number } {
+  const centerLat = (region.latMin + region.latMax) / 2
+  const widthM =
+    (region.lonMax - region.lonMin) *
+    METERS_PER_DEG_LON *
+    Math.max(0.02, Math.cos(THREE.MathUtils.degToRad(centerLat)))
+  return { widthM, widthUnits: SURFACE_PLATE_UNITS, heightUnits: SURFACE_PLATE_UNITS }
 }
 
 export class SceneBuilder {
   private stars: StarRecord[]
+  private interstellarClouds: { local: THREE.Points; distant: THREE.Points } | null = null
   private earth = loadEarthTextures()
   private surfaceSource: "gibs" | "fallback" | "none" = "none"
+  private surfacePlate: { widthM: number; widthUnits: number; heightUnits: number } | null = null
   onSurfaceSource?: (source: "gibs" | "fallback") => void
 
   constructor(stars: StarRecord[]) {
@@ -164,6 +172,52 @@ export class SceneBuilder {
 
   setStars(stars: StarRecord[]) {
     this.stars = stars
+    if (this.interstellarClouds) {
+      updateStarPoints(this.interstellarClouds.local, this.localStarPoints())
+      updateStarPoints(this.interstellarClouds.distant, this.distantStarPoints())
+    }
+  }
+
+  private localStarPoints(): StarPoint[] {
+    const points: StarPoint[] = []
+    for (const star of this.stars) {
+      if (!Number.isFinite(star.raDeg) || !Number.isFinite(star.decDeg)) continue
+      if (star.distPc <= 0 || star.distPc >= 400 || star.mag >= 10.5) continue
+      const dir = raDecToVector(star.raDeg, star.decDeg)
+      const [r, g, b] = bvToRgb(star.bv)
+      const d = star.distPc * 3.26156
+      points.push({
+        x: dir.x * d,
+        y: dir.y * d,
+        z: dir.z * d,
+        r,
+        g,
+        b,
+        size: Math.max(0.5, 3.4 - star.mag * 0.29),
+      })
+    }
+    return points
+  }
+
+  private distantStarPoints(): StarPoint[] {
+    const points: StarPoint[] = []
+    for (const star of this.stars) {
+      if (!Number.isFinite(star.raDeg) || !Number.isFinite(star.decDeg)) continue
+      if (star.mag >= 8.2) continue
+      if (star.distPc > 0 && star.distPc < 400 && star.mag < 10.5) continue
+      const dir = raDecToVector(star.raDeg, star.decDeg)
+      const [r, g, b] = bvToRgb(star.bv)
+      points.push({
+        x: dir.x * 2200,
+        y: dir.y * 2200,
+        z: dir.z * 2200,
+        r,
+        g,
+        b,
+        size: Math.max(0.5, 2.4 - star.mag * 0.2),
+      })
+    }
+    return points
   }
 
   /* ------------------------------------------------------------------ */
@@ -174,10 +228,11 @@ export class SceneBuilder {
     const group = new THREE.Group()
     group.name = "surface"
     const bodies = new Map<string, THREE.Object3D>()
-    const bounds = surfaceBounds(origin)
-    const width = 1300
-    const height = 1300
-    const fallback = cropTextureRegion(texture("/textures/earth_day.jpg"), bounds)
+    const region = surfaceRegion(origin.lat, origin.lng)
+    this.surfacePlate = surfacePlate(region)
+    const width = SURFACE_PLATE_UNITS
+    const height = SURFACE_PLATE_UNITS
+    const fallback = cropTextureRegion(texture("/textures/earth_day.jpg"), region)
     fallback.userData.owned = true
     const geometry = new THREE.PlaneGeometry(width, height, 72, 72)
     const positions = geometry.getAttribute("position") as THREE.BufferAttribute
@@ -198,8 +253,8 @@ export class SceneBuilder {
     plane.userData.bodyId = "earth"
     group.add(plane)
 
-    const markerX = ((origin.lng - (bounds.lonMin + bounds.lonMax) / 2) / (bounds.lonMax - bounds.lonMin)) * width
-    const markerY = ((origin.lat - (bounds.latMin + bounds.latMax) / 2) / (bounds.latMax - bounds.latMin)) * height
+    const markerX = ((origin.lng - (region.lonMin + region.lonMax) / 2) / (region.lonMax - region.lonMin)) * width
+    const markerY = ((origin.lat - (region.latMin + region.latMax) / 2) / (region.latMax - region.latMin)) * height
     const marker = createOriginMarker("#38bdf8", 15)
     marker.position.set(markerX, markerY, 5)
     group.add(marker)
@@ -221,17 +276,17 @@ export class SceneBuilder {
       },
     }
 
-    void this.refreshSurface(built, origin, plane)
+    void this.refreshSurface(plane, region)
     return built
   }
 
-  private async refreshSurface(
-    built: BuiltRegime,
-    origin: Origin,
-    plane: THREE.Mesh,
-  ) {
+  getSurfacePlate() {
+    return this.surfacePlate
+  }
+
+  private async refreshSurface(plane: THREE.Mesh, region: SurfaceRegion) {
     try {
-      const mosaic = await buildGibsMosaic(origin.lat, origin.lng, 9, 14)
+      const mosaic = await buildGibsMosaic(region)
       const material = plane.material as THREE.MeshBasicMaterial
       const previous = material.map
       material.map = mosaic.texture
@@ -239,7 +294,6 @@ export class SceneBuilder {
       if (previous?.userData?.owned) previous.dispose()
       this.surfaceSource = mosaic.source
       this.onSurfaceSource?.(mosaic.source)
-      built.group.userData.surfaceSource = mosaic.source
     } catch {
       this.surfaceSource = "fallback"
       this.onSurfaceSource?.("fallback")
@@ -257,7 +311,7 @@ export class SceneBuilder {
     const radius = 100
     const sunDirection = geoToSphere(12, 0)
     const earthMaterial = createEarthMaterial(this.earth, sunDirection, {
-      nightIntensity: 1.05,
+      nightIntensity: 0.55,
       exposure: 1.06,
     })
     const earth = new THREE.Mesh(new THREE.SphereGeometry(radius, 96, 96), earthMaterial)
@@ -280,6 +334,15 @@ export class SceneBuilder {
     const equator = createHairline(circlePoints(radius * 1.002, 256, "xz"), "#94a3b8", 0.08, true)
     equator.userData.layer = "grid"
     group.add(equator)
+
+    const moonMesh = new THREE.Mesh(
+      new THREE.SphereGeometry(radius * 0.16, 48, 48),
+      new THREE.MeshStandardMaterial({ map: texture("/textures/moon.jpg"), roughness: 1 }),
+    )
+    moonMesh.userData.bodyId = "moon"
+    moonMesh.userData.focusDistance = 26
+    group.add(moonMesh)
+    bodies.set("moon", moonMesh)
 
     const issOrbit = createHairline(circlePoints(radius * 1.066, 256, "xz"), "#38bdf8", 0.22, true)
     issOrbit.rotation.x = THREE.MathUtils.degToRad(51.6)
@@ -307,6 +370,18 @@ export class SceneBuilder {
       sub: "BLUE MARBLE",
       priority: 8,
     })
+    const moonLabel: LabelSpec = {
+      id: "moon",
+      name: "Moon",
+      bodyId: "moon",
+      kind: "moon",
+      priority: 6,
+      getPosition: () => moonMesh.getWorldPosition(new THREE.Vector3()),
+      getSub: (ctx) => {
+        const km = moonDistanceKm(ctx.date)
+        return `${Math.round(km).toLocaleString("en-US")} km`
+      },
+    }
     const issLabel: LabelSpec = {
       id: "iss",
       name: "ISS",
@@ -324,6 +399,12 @@ export class SceneBuilder {
     sky.userData.layer = "constellations"
     group.add(sky)
 
+    // Smoothed orbital state so the ISS glides between live API samples
+    // instead of teleporting every refresh.
+    let issLat = 23.18
+    let issLng = 78.94
+    let issSeeded = false
+
     const update = (ctx: UpdateContext) => {
       const ss = subsolarPoint(ctx.date)
       const dir = geoToSphere(ss.lat, ss.lon)
@@ -335,10 +416,18 @@ export class SceneBuilder {
       this.earth.clouds.offset.x = (ctx.date.getTime() / 1000 / 86400) * 0.0025
       this.earth.clouds.offset.y = 0
       if (ctx.iss) {
+        if (!issSeeded) {
+          issLat = ctx.iss.lat
+          issLng = ctx.iss.lng
+          issSeeded = true
+        }
+        const k = 1 - Math.exp(-Math.max(ctx.dt, 0) * 0.55)
+        const shortLng = (((ctx.iss.lng - issLng + 540) % 360) + 360) % 360 - 180
+        issLng += shortLng * k
+        issLat += (ctx.iss.lat - issLat) * k
         const alt = radius * (1 + ctx.iss.altitudeKm / 6378.137)
-        issMarker.position.copy(geoToSphere(ctx.iss.lat, ctx.iss.lng, alt))
-        const issOrbitRotation = THREE.MathUtils.degToRad(51.6)
-        issOrbit.rotation.x = issOrbitRotation
+        issMarker.position.copy(geoToSphere(issLat, issLng, alt))
+        issOrbit.rotation.x = THREE.MathUtils.degToRad(51.6)
       } else {
         issMarker.position.copy(geoToSphere(23.18, 78.94, radius * 1.066))
       }
@@ -347,6 +436,11 @@ export class SceneBuilder {
         new THREE.Vector3(0, 0, 1),
         originMarker.position.clone().normalize(),
       )
+      const moonAu = moonGeoAu(ctx.date)
+      const moonDir = new THREE.Vector3(moonAu.x, moonAu.z, -moonAu.y)
+      if (moonDir.lengthSq() > 1e-12) moonDir.normalize()
+      moonMesh.position.copy(moonDir).multiplyScalar(radius * 2.9)
+      moonMesh.rotation.y = ctx.date.getTime() / 86400000 / 27.3217 * Math.PI * 2
     }
     update({
       date: new Date(),
@@ -359,9 +453,9 @@ export class SceneBuilder {
     return {
       group,
       bodies,
-      labels: [earthLabel, originLabel, issLabel],
+      labels: [earthLabel, moonLabel, originLabel, issLabel],
       update,
-      focusDistance: { earth: 330, iss: 34, origin: 330 },
+      focusDistance: { earth: 330, moon: 40, iss: 34, origin: 330 },
     }
   }
 
@@ -451,9 +545,12 @@ export class SceneBuilder {
           },
           vertexShader: /* glsl */ `
             varying vec2 vPos;
+            #include <common>
+            #include <logdepthbuf_pars_vertex>
             void main() {
               vPos = position.xy;
               gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+              #include <logdepthbuf_vertex>
             }
           `,
           fragmentShader: /* glsl */ `
@@ -462,7 +559,9 @@ export class SceneBuilder {
             uniform float outer;
             uniform float opacity;
             varying vec2 vPos;
+            #include <logdepthbuf_pars_fragment>
             void main() {
+              #include <logdepthbuf_fragment>
               float r = length(vPos);
               float t = (r - inner) / (outer - inner);
               if (t < 0.0 || t > 1.0) discard;
@@ -485,7 +584,7 @@ export class SceneBuilder {
       const orbitLine = createHairline(
         planetOrbitAu(id, 256).map((p) => compressedAu(p)),
         id === "earth" ? "#38bdf8" : "#94a3b8",
-        id === "earth" ? 0.14 : 0.08,
+        id === "earth" ? 0.12 : 0.065,
         true,
       )
       orbitLine.userData.layer = "orbits"
@@ -500,6 +599,7 @@ export class SceneBuilder {
         maxCameraDistance: 900,
         getPosition: () => orbitGroup.getWorldPosition(new THREE.Vector3()),
         getSub: (ctx) => {
+          if (id === "earth") return "1.00 AU from the Sun"
           const earthPos = planetPositionAu("earth", ctx.date)
           const pos = planetPositionAu(id, ctx.date)
           const au = Math.hypot(pos.x - earthPos.x, pos.y - earthPos.y, pos.z - earthPos.z)
@@ -525,10 +625,49 @@ export class SceneBuilder {
       bodyId: "moon",
       kind: "moon",
       priority: 5,
-      maxCameraDistance: 140,
+      maxCameraDistance: 150,
       getPosition: () => moon.getWorldPosition(new THREE.Vector3()),
-      getSub: () => "384,400 km · distance compressed",
+      getSub: (ctx) => {
+        const km = moonDistanceKm(ctx.date)
+        return `${Math.round(km).toLocaleString("en-US")} km · ${(km / 299792.458).toFixed(1)} s`
+      },
     })
+
+    // Active spacecraft on their real heliocentric distances. Positions are
+    // fixed trajectory bearings (ecliptic longitude/latitude) at the current
+    // epoch; radial distance is faithful to the catalog.
+    const SPACECRAFT: Array<{ id: string; au: number; lonDeg: number; latDeg: number }> = [
+      { id: "parker-solar-probe", au: 0.1, lonDeg: 118, latDeg: 3 },
+      { id: "jwst", au: 1.01, lonDeg: 96, latDeg: -1 },
+      { id: "new-horizons", au: 61, lonDeg: 289, latDeg: 2 },
+      { id: "voyager-2", au: 139, lonDeg: 289, latDeg: -34 },
+      { id: "voyager-1", au: 167, lonDeg: 255, latDeg: 35 },
+    ]
+    for (const craft of SPACECRAFT) {
+      const body = findBody(craft.id)
+      const lon = THREE.MathUtils.degToRad(craft.lonDeg)
+      const lat = THREE.MathUtils.degToRad(craft.latDeg)
+      const au = { x: Math.cos(lat) * Math.cos(lon) * craft.au, y: Math.cos(lat) * Math.sin(lon) * craft.au, z: Math.sin(lat) * craft.au }
+      const probe = new THREE.Group()
+      probe.position.copy(compressedAu(au))
+      probe.userData.bodyId = craft.id
+      probe.userData.layer = "spacecraft"
+      probe.userData.focusDistance = 26
+      probe.add(createMarker("#f59e0b", 1.9, 0.95))
+      probe.add(createGlow("#f59e0b", 3.4, 0.5, true))
+      group.add(probe)
+      bodies.set(craft.id, probe)
+      labels.push({
+        id: craft.id,
+        name: body?.name ?? craft.id,
+        bodyId: craft.id,
+        kind: "spacecraft",
+        priority: craft.id === "jwst" ? 3 : body?.notable ? 7 : 4,
+        maxCameraDistance: craft.id === "jwst" ? 160 : 1200,
+        getPosition: () => probe.getWorldPosition(new THREE.Vector3()),
+        getSub: () => `${craft.au < 1 ? craft.au.toFixed(2) : Math.round(craft.au)} AU`,
+      })
+    }
 
     const jupiter = planetGroups.get("jupiter")!
     const jupiterMoons: Array<{ id: string; color: string; distance: number; size: number; period: number }> = [
@@ -629,7 +768,12 @@ export class SceneBuilder {
         const holder = orbitGroup.children[0]
         if (holder) holder.rotation.y = (days / (PLANET_ELEMENTS[id]?.periodDays ?? 365)) * Math.PI * 2
       }
-      moonPivot.rotation.y = (days / 27.3217) * Math.PI * 2 + 0.6
+      // Real geocentric lunar position, mapped into the compressed scene.
+      const moonAu = moonGeoAu(date)
+      const moonDir = new THREE.Vector3(moonAu.x, moonAu.z, -moonAu.y)
+      if (moonDir.lengthSq() > 1e-12) moonDir.normalize()
+      moon.position.copy(moonDir).multiplyScalar(6.2)
+      moon.rotation.y = (days / 27.3217) * Math.PI * 2
       // Animate the Galilean moon InstancedMesh: per-instance orbital position.
       // Reuse one dummy across instances to avoid allocations.
       for (const m of jupiterMoonState) {
@@ -718,39 +862,20 @@ export class SceneBuilder {
     const bodies = new Map<string, THREE.Object3D>()
     const labels: LabelSpec[] = []
 
-    const local: StarPoint[] = []
-    const distant: StarPoint[] = []
-    for (const star of this.stars) {
-      if (!Number.isFinite(star.raDeg) || !Number.isFinite(star.decDeg)) continue
-      if (star.distPc <= 0) continue
-      const dir = raDecToVector(star.raDeg, star.decDeg)
-      const [r, g, b] = bvToRgb(star.bv)
-      const mag = Math.max(-1.5, Math.min(12, star.mag))
-      if (star.distPc < 400 && mag < 10.5) {
-        const d = star.distPc * 3.26156
-        local.push({
-          x: dir.x * d,
-          y: dir.y * d,
-          z: dir.z * d,
-          r,
-          g,
-          b,
-          size: Math.max(0.5, 3.4 - mag * 0.29),
-        })
-      } else if (mag < 8.2) {
-        distant.push({
-          x: dir.x * 2200,
-          y: dir.y * 2200,
-          z: dir.z * 2200,
-          r,
-          g,
-          b,
-          size: Math.max(0.5, 2.4 - mag * 0.2),
-        })
-      }
-    }
-    group.add(createStarPoints(local, { scale: 105, opacity: 0.92, minSize: 1, maxSize: 9 }))
-    group.add(createStarPoints(distant, { scale: 5200, opacity: 0.62, minSize: 0.8, maxSize: 5 }))
+    const localCloud = createStarPoints(this.localStarPoints(), {
+      scale: 220,
+      opacity: 1,
+      minSize: 1.4,
+      maxSize: 11,
+    })
+    const distantCloud = createStarPoints(this.distantStarPoints(), {
+      scale: 9000,
+      opacity: 0.6,
+      minSize: 1,
+      maxSize: 6,
+    })
+    group.add(localCloud, distantCloud)
+    this.interstellarClouds = { local: localCloud, distant: distantCloud }
 
     const sunGlow = createGlow("#ffd7a1", 5.5, 0.95)
     group.add(sunGlow)
@@ -771,14 +896,7 @@ export class SceneBuilder {
       const ring = createHairline(circlePoints(ly, 160, "xz"), "#94a3b8", 0.11, true)
       ring.userData.layer = "grid"
       group.add(ring)
-      labels.push({
-        id: `scale-${ly}`,
-        name: `${ly} ly`,
-        kind: "scale",
-        priority: 1,
-        maxCameraDistance: 900,
-        getPosition: () => new THREE.Vector3(ly, 0, 0),
-      })
+
     }
 
     const exoGroup = new THREE.Group()
@@ -808,6 +926,7 @@ export class SceneBuilder {
       marker.position.copy(position)
       marker.userData.bodyId = body.id
       marker.userData.focusDistance = 18
+      if (body.kind === "star") marker.add(createGlow(body.color, size * 3.2, 0.42))
       group.add(marker)
       bodies.set(body.id, marker)
       labels.push({
@@ -967,8 +1086,38 @@ export class SceneBuilder {
         size: 0.5 + random() * (isOB ? 1.6 : 0.9),
       })
     }
-    const armsMesh = createStarPoints(armPoints, { scale: 110, opacity: 0.88, minSize: 0.6, maxSize: 4.2, soft: true })
+    const armsMesh = createStarPoints(armPoints, { scale: 130, opacity: 0.9, minSize: 0.9, maxSize: 5.2, soft: true })
     group.add(armsMesh)
+
+    // 2b. Diffuse stellar disk: fills the inter-arm space with a faint warm
+    // haze so the spiral reads as a galaxy, not as separate dotted curves.
+    const diskPoints: StarPoint[] = []
+    const diskWarm = new THREE.Color("#f3e3c6")
+    const diskCool = new THREE.Color("#cdddfb")
+    for (let i = 0; i < 16000; i++) {
+      const r = 3.5 + Math.pow(random(), 0.55) * 60
+      const angle = random() * Math.PI * 2
+      const y = gaussian(random) * (0.45 + (r / 60) * 1.4)
+      const col = random() < 0.6 ? diskWarm : diskCool
+      diskPoints.push({
+        x: Math.cos(angle) * r,
+        y,
+        z: Math.sin(angle) * r,
+        r: col.r,
+        g: col.g,
+        b: col.b,
+        size: 0.8 + random() * 2.1,
+      })
+    }
+    group.add(
+      createStarPoints(diskPoints, {
+        scale: 150,
+        opacity: 0.3,
+        minSize: 1,
+        maxSize: 5,
+        soft: true,
+      }),
+    )
 
     // 3. Dark Dust Lanes (10,000 absorbing particles)
     const dustPoints: StarPoint[] = []
@@ -1154,22 +1303,38 @@ export class SceneBuilder {
     const labels: LabelSpec[] = []
     const random = seededRandom(13800)
 
-    // 1. Delicate Translucent Planck CMB Horizon Shell (at radius 300, low opacity <= 0.14)
-    const cmb = new THREE.Mesh(
-      new THREE.SphereGeometry(300, 64, 64),
-      new THREE.MeshBasicMaterial({
-        map: cmbTexture(),
-        side: THREE.BackSide,
-        transparent: true,
-        opacity: 0.12,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending,
-        toneMapped: false,
-      }),
-    )
-    group.add(cmb)
+    // 1. Planck CMB horizon: a delicate particulate shell plus three faint
+    // great circles. No photographic sphere, so there is never a blurry
+    // mottled ball at the outer boundary.
+    const horizonPoints: StarPoint[] = []
+    const horizonCool = new THREE.Color("#7fb4ff")
+    const horizonWarm = new THREE.Color("#ffb877")
+    for (let i = 0; i < 9000; i++) {
+      const theta = random() * Math.PI * 2
+      const z = random() * 2 - 1
+      const r = Math.sqrt(Math.max(0, 1 - z * z))
+      const radius = 556 + random() * 4
+      const c = horizonCool.clone().lerp(horizonWarm, random() * 0.55)
+      horizonPoints.push({
+        x: Math.cos(theta) * r * radius,
+        y: z * radius,
+        z: Math.sin(theta) * r * radius,
+        r: c.r,
+        g: c.g,
+        b: c.b,
+        size: 0.35 + random() * 0.9,
+      })
+    }
+    const horizonShell = createStarPoints(horizonPoints, {
+      scale: 260,
+      opacity: 0.26,
+      minSize: 0.5,
+      maxSize: 2.2,
+      soft: true,
+    })
+    group.add(horizonShell)
 
-    const horizonGrid = createHairline(circlePoints(298, 256, "xz"), "#f59e0b", 0.08, true)
+    const horizonGrid = createHairline(circlePoints(558, 256, "xz"), "#9db8d8", 0.05, true)
     horizonGrid.userData.layer = "grid"
     group.add(horizonGrid)
 
@@ -1214,7 +1379,7 @@ export class SceneBuilder {
       mid.add(bend)
       const curve = new THREE.QuadraticBezierCurve3(p1, mid, p2)
       const spinePoints = curve.getPoints(24)
-      const spineLine = createHairline(spinePoints, "#7dd3fc", 0.07)
+      const spineLine = createHairline(spinePoints, "#7dd3fc", 0.045)
       group.add(spineLine)
     }
 
@@ -1226,7 +1391,23 @@ export class SceneBuilder {
       new THREE.Color("#ffffff"),
     ]
 
-    for (let i = 0; i < 35000; i++) {
+    // Dense cluster cores at each supercluster node.
+    for (const node of NODES) {
+      const baseColor = new THREE.Color(node.color)
+      for (let i = 0; i < 650; i++) {
+        webPoints.push({
+          x: node.pos.x + gaussian(random) * 7,
+          y: node.pos.y + gaussian(random) * 6,
+          z: node.pos.z + gaussian(random) * 7,
+          r: baseColor.r,
+          g: baseColor.g,
+          b: baseColor.b,
+          size: 0.5 + random() * 1.2,
+        })
+      }
+    }
+
+    for (let i = 0; i < 42000; i++) {
       let p: THREE.Vector3
       let col: THREE.Color
       let size: number
@@ -1235,7 +1416,7 @@ export class SceneBuilder {
         const edge = filamentEdges[Math.floor(random() * filamentEdges.length)]
         const t = random()
         const base = edge[0].clone().lerp(edge[1], t)
-        const transverse = (1.2 + Math.sin(t * Math.PI) * 2.8) * gaussian(random)
+        const transverse = (2.0 + Math.sin(t * Math.PI) * 4.2) * gaussian(random)
         const perp = new THREE.Vector3(gaussian(random), gaussian(random), gaussian(random)).normalize().multiplyScalar(transverse)
         p = base.add(perp)
         col = galaxyHues[Math.floor(random() * (galaxyHues.length - 1))]
@@ -1267,14 +1448,27 @@ export class SceneBuilder {
       })
     }
 
-    const webMesh = createStarPoints(webPoints, { scale: 115, opacity: 0.65, minSize: 0.6, maxSize: 3.5, soft: true })
+    const webMesh = createStarPoints(webPoints, { scale: 125, opacity: 0.7, minSize: 0.7, maxSize: 3.8, soft: true })
     group.add(webMesh)
 
-    // Local Group cluster at center
+    // Local Group at the centre: the Milky Way itself plus its satellites.
     const localGroup = new THREE.Group()
-    for (let i = 0; i < 90; i++) {
-      const p = new THREE.Vector3(gaussian(random) * 4.5, gaussian(random) * 2.2, gaussian(random) * 4.5)
-      const dot = createGlow(random() < 0.25 ? "#ffd9a0" : "#c8e2ff", 0.8 + random() * 0.9, 0.75)
+    const milkyWayDisc = new THREE.Sprite(
+      new THREE.SpriteMaterial({
+        map: galaxyTexture(512, 21),
+        color: new THREE.Color("#ffe4c2"),
+        transparent: true,
+        opacity: 0.62,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        toneMapped: false,
+      }),
+    )
+    milkyWayDisc.scale.set(17, 17, 1)
+    localGroup.add(milkyWayDisc)
+    for (let i = 0; i < 34; i++) {
+      const p = new THREE.Vector3(gaussian(random) * 7, gaussian(random) * 3, gaussian(random) * 7)
+      const dot = createGlow(random() < 0.25 ? "#ffd9a0" : "#c8e2ff", 0.7 + random() * 0.8, 0.65)
       dot.position.copy(p)
       localGroup.add(dot)
     }
@@ -1301,7 +1495,7 @@ export class SceneBuilder {
       } else if (body.id === "cosmic-web") {
         position = new THREE.Vector3(42, 24, 46)
       } else if (body.id === "cmb-horizon") {
-        position = new THREE.Vector3(0, 0, -286)
+        position = new THREE.Vector3(0, 0, -556)
       } else if (body.raDeg !== undefined && body.decDeg !== undefined && body.distLy) {
         const dirVec = raDecToVector(body.raDeg, body.decDeg)
         position = new THREE.Vector3(dirVec.x, dirVec.y, dirVec.z).multiplyScalar(
@@ -1340,8 +1534,8 @@ export class SceneBuilder {
           marker.add(dot)
         }
       } else if (body.kind === "horizon") {
-        marker.add(createMarker("#f59e0b", 6.5, 0.85))
-        marker.add(createGlow("#e0a060", 16, 0.22))
+        marker.add(createMarker("#f59e0b", 3.4, 0.6))
+        marker.add(createGlow("#e0a060", 8, 0.14))
       } else {
         marker.add(createMarker(body.color, 3.2, 0.9))
         marker.add(createGlow(body.color, 7.5, 0.18))
@@ -1376,7 +1570,7 @@ export class SceneBuilder {
         "great-attractor": 58,
         "local-group": 40,
         "cosmic-web": 80,
-        "cmb-horizon": 100,
+        "cmb-horizon": 120,
       },
     }
   }

@@ -18,11 +18,14 @@ import { disposeObject } from "./helpers"
 import { createPostProcessing, type PostProcessing } from "./postProcessing"
 import {
   BODY_LOG_DIST,
+  CAMERA_FOV_DEG,
   formatLightTime,
   formatPhysicalDistance,
   getPrimaryRegime,
   getRegimeWeights,
   getRegionName,
+  surfaceFrameWidthM,
+  surfaceMaxCameraDistance,
 } from "./scaleController"
 
 export interface EngineInfo {
@@ -116,6 +119,8 @@ export class CosmicEngine {
   private fpsFrames = 0
   private fpsTime = 0
   private fps = 60
+  private contextLost = false
+  private readoutM = 0
 
   constructor(container: HTMLElement, options: EngineOptions, callbacks: EngineCallbacks = {}) {
     this.container = container
@@ -128,8 +133,11 @@ export class CosmicEngine {
       antialias: true,
       alpha: false,
       powerPreference: "high-performance",
+      logarithmicDepthBuffer: true,
     })
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.8))
+    this.renderer.setPixelRatio(
+      Math.min(window.devicePixelRatio || 1, /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ? 1.35 : 1.8),
+    )
     this.renderer.setSize(Math.max(1, container.clientWidth), Math.max(1, container.clientHeight))
     this.renderer.outputColorSpace = THREE.SRGBColorSpace
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping
@@ -146,23 +154,18 @@ export class CosmicEngine {
     container.appendChild(this.veil)
 
     this.camera = new THREE.PerspectiveCamera(
-      48,
+      CAMERA_FOV_DEG,
       Math.max(1, container.clientWidth) / Math.max(1, container.clientHeight),
       0.05,
       120000,
     )
-    ;(this.camera as { logarithmicDepthBuffer?: boolean }).logarithmicDepthBuffer = true // stable depth across 25 orders of magnitude
     this.scene.background = new THREE.Color("#000000")
     this.rig = new CameraRig(this.camera, this.renderer.domElement, 2.4)
     this.rig.autoRotate = false
     this.rig.onInteraction = () => {
-      if (
-        this.targetId &&
-        (this.rig.wasDrag() ||
-          Math.abs(this.rig.state.logDist - (BODY_LOG_DIST[this.targetId] ?? 0)) > 0.5)
-      ) {
-        this.select(null, false)
-      }
+      // Any scroll or drag hands control back to the user and dismisses the
+      // fact sheet, exactly like an empty-space tap.
+      if (this.targetId) this.select(null, false)
       this.callbacks.onFrame?.(this.frameInfo())
     }
 
@@ -185,6 +188,7 @@ export class CosmicEngine {
       built.group.visible = false
       this.scene.add(built.group)
     }
+    this.applySurfaceLimit()
     this.regimes.surface.group.visible = true
     this.applyLayers()
     this.applyHome("surface", true)
@@ -196,6 +200,8 @@ export class CosmicEngine {
     this.renderer.domElement.addEventListener("pointerdown", this.onPointerDown)
     this.renderer.domElement.addEventListener("pointerup", this.onPointerUp)
     this.renderer.domElement.addEventListener("pointercancel", this.onPointerCancel)
+    this.renderer.domElement.addEventListener("webglcontextlost", this.onContextLost)
+    this.renderer.domElement.addEventListener("webglcontextrestored", this.onContextRestored)
 
     this.resizeObserver = new ResizeObserver(this.onResize)
     this.resizeObserver.observe(container)
@@ -239,6 +245,11 @@ export class CosmicEngine {
     this.builder.setStars(stars)
   }
 
+  private applySurfaceLimit() {
+    const plate = this.builder.getSurfacePlate()
+    if (plate) this.rig.setSurfaceDistanceLimit(surfaceMaxCameraDistance(plate.heightUnits))
+  }
+
   async flyToBody(id: string, duration = 2.0): Promise<void> {
     const targetLog = BODY_LOG_DIST[id]
     if (targetLog !== undefined) {
@@ -279,6 +290,15 @@ export class CosmicEngine {
   }
 
   private homePose(regime: RegimeId): HomePose {
+    const homeDistance: Record<RegimeId, number> = {
+      surface: 2.4,
+      orbit: 6.2,
+      solar_system: 10.5,
+      interstellar: 16.6,
+      milky_way: 20.2,
+      universe: 26.5,
+    }
+    const distance = this.rig.getFramedDistance(homeDistance[regime])
     switch (regime) {
       case "surface": {
         const marker = this.regimes.surface.labels.find((label) => label.id === "origin")
@@ -286,10 +306,10 @@ export class CosmicEngine {
           target: marker ? marker.getPosition() : new THREE.Vector3(),
           yaw: 0,
           pitch: 0.01,
-          distance: 640,
-          min: 140,
+          distance,
+          min: 90,
           max: 1800,
-          base: 640,
+          base: distance,
         }
       }
       case "orbit":
@@ -297,50 +317,50 @@ export class CosmicEngine {
           target: new THREE.Vector3(),
           yaw: 0.68,
           pitch: 0.18,
-          distance: 330,
+          distance,
           min: 132,
           max: 900,
-          base: 330,
+          base: distance,
         }
       case "solar_system":
         return {
           target: new THREE.Vector3(),
           yaw: 0.92,
           pitch: 0.62,
-          distance: 430,
+          distance,
           min: 20,
           max: 1200,
-          base: 430,
+          base: distance,
         }
       case "interstellar":
         return {
           target: new THREE.Vector3(),
           yaw: 0.82,
           pitch: 0.32,
-          distance: 120,
+          distance,
           min: 4,
           max: 2400,
-          base: 120,
+          base: distance,
         }
       case "milky_way":
         return {
-          target: new THREE.Vector3(20, 0, 0),
-          yaw: 0.72,
+          target: new THREE.Vector3(18, 0, 0),
+          yaw: 0.86,
           pitch: 0.92,
-          distance: 190,
+          distance,
           min: 12,
-          max: 460,
-          base: 190,
+          max: 480,
+          base: distance,
         }
       case "universe":
         return {
           target: new THREE.Vector3(),
           yaw: 0.8,
-          pitch: 0.42,
-          distance: 236,
+          pitch: 0.5,
+          distance,
           min: 14,
-          max: 620,
-          base: 236,
+          max: 640,
+          base: distance,
         }
     }
   }
@@ -427,6 +447,7 @@ export class CosmicEngine {
     this.origin = origin
     const old = this.regimes.surface
     const next = this.builder.buildSurface(origin)
+    this.applySurfaceLimit()
     this.scene.remove(old.group)
     disposeObject(old.group)
     this.regimes.surface = next
@@ -436,7 +457,15 @@ export class CosmicEngine {
       this.rebuildLabels()
       const marker = next.labels.find((label) => label.id === "origin")
       if (marker) {
-        this.rig.setPose({ target: marker.getPosition(), distance: 640, yaw: 0, pitch: 0.01 }, true)
+        this.rig.setPose(
+          {
+            target: marker.getPosition(),
+            distance: this.rig.getFramedDistance(this.rig.state.logDist),
+            yaw: 0,
+            pitch: 0.01,
+          },
+          true,
+        )
       }
     }
     this.frameAccumulator = 1
@@ -575,6 +604,9 @@ export class CosmicEngine {
       origin: this.origin,
       layers: this.layers,
     }
+    // Screen-space label decluttering: higher-priority labels win, and a
+    // label that would collide with one already placed is quietly hidden.
+    const candidates: Array<{ entry: LabelEntry; x: number; y: number; priority: number; width: number }> = []
     for (const entry of this.labels) {
       const { spec, element } = entry
       const kind = spec.kind
@@ -616,11 +648,13 @@ export class CosmicEngine {
       }
       const x = (projected.x * 0.5 + 0.5) * width
       const y = (-projected.y * 0.5 + 0.5) * height
-      element.style.left = `${x.toFixed(1)}px`
-      element.style.top = `${y.toFixed(1)}px`
-      element.classList.remove("is-hidden")
-      element.classList.toggle("is-active", spec.bodyId === this.targetId)
-      entry.visible = true
+      candidates.push({
+        entry,
+        x,
+        y,
+        priority: spec.priority ?? 0,
+        width: Math.max(46, entry.name.textContent.length * 6.6 + 14),
+      })
       if (refreshSub && spec.getSub) {
         const next = spec.getSub(ctx) ?? ""
         if (next !== entry.lastSub) {
@@ -629,6 +663,39 @@ export class CosmicEngine {
           entry.lastSub = next
         }
       }
+    }
+
+    // First pass: position every visible candidate so it can be measured.
+    for (const candidate of candidates) {
+      candidate.entry.element.style.left = `${candidate.x.toFixed(1)}px`
+      candidate.entry.element.style.top = `${candidate.y.toFixed(1)}px`
+      candidate.entry.element.classList.remove("is-hidden")
+    }
+
+    // Second pass: measure the real rendered boxes, then hide collisions.
+    candidates.sort((a, b) => b.priority - a.priority)
+    const placed: Array<{ x1: number; x2: number; y1: number; y2: number }> = []
+    for (const candidate of candidates) {
+      const el = candidate.entry.element
+      const w = el.offsetWidth || candidate.width
+      const h = el.offsetHeight || 22
+      // Labels sit above their anchor (CSS translate -100% - 7px).
+      const x1 = candidate.x - w / 2 - 5
+      const x2 = candidate.x + w / 2 + 5
+      const y1 = candidate.y - h - 12
+      const y2 = candidate.y - 3
+      const collides =
+        placed.some((r) => x1 < r.x2 && x2 > r.x1 && y1 < r.y2 && y2 > r.y1) ||
+        (x2 < 470 && y2 < 116) ||
+        x1 > width - 42
+      if (collides && candidate.entry.spec.bodyId !== this.targetId) {
+        el.classList.add("is-hidden")
+        candidate.entry.visible = false
+        continue
+      }
+      placed.push({ x1, x2, y1, y2 })
+      el.classList.toggle("is-active", candidate.entry.spec.bodyId === this.targetId)
+      candidate.entry.visible = true
     }
   }
 
@@ -650,11 +717,29 @@ export class CosmicEngine {
     this.downPoint = null
   }
 
+  private onContextLost = (event: Event) => {
+    event.preventDefault()
+    this.contextLost = true
+    cancelAnimationFrame(this.raf)
+  }
+
+  private onContextRestored = () => {
+    this.contextLost = false
+    if (!this.disposed) {
+      this.renderer.setPixelRatio(
+      Math.min(window.devicePixelRatio || 1, /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ? 1.35 : 1.8),
+    )
+      this.onResize()
+      this.raf = requestAnimationFrame(this.loop)
+    }
+  }
+
   private onPointerUp = (event: PointerEvent) => {
     if (!this.downPoint) return
     const moved = Math.hypot(event.clientX - this.downPoint.x, event.clientY - this.downPoint.y)
     this.downPoint = null
-    if (moved > 6) return
+    // A pinch or orbit drag must never land as a tap on whatever is underneath.
+    if (moved > 6 || this.rig.wasDrag()) return
     const rect = this.renderer.domElement.getBoundingClientRect()
     const ndc = new THREE.Vector2(
       ((event.clientX - rect.left) / rect.width) * 2 - 1,
@@ -682,7 +767,7 @@ export class CosmicEngine {
   /* ------------------------------------------------------------------ */
 
   private loop = () => {
-    if (this.disposed) return
+    if (this.disposed || this.contextLost) return
     this.raf = requestAnimationFrame(this.loop)
     this.timer.update()
     const dt = Math.min(0.06, this.timer.getDelta())
@@ -703,6 +788,11 @@ export class CosmicEngine {
     const primary = getPrimaryRegime(logDist)
     if (primary !== this.regime) {
       this.regime = primary
+      const home = this.homePose(primary)
+      this.rig.setBounds(home.min, home.max, home.base)
+      // Ease the viewing inclination toward the new regime's natural angle.
+      // A user who is actively dragging keeps full manual control.
+      if (!this.rig.wasDrag()) this.rig.setPose({ pitch: home.pitch })
       this.callbacks.onRegimeChange?.(primary)
       this.rebuildLabels()
     }
@@ -735,9 +825,32 @@ export class CosmicEngine {
     }
   }
 
+  /**
+   * Distance shown in the readout.
+   *
+   * Away from Earth the log coordinate is the true scale. The surface regime is
+   * a fixed regional mosaic, so there the honest value is the ground actually
+   * framed by the camera; as that mosaic fades into the globe the readout
+   * blends back to the coordinate so a scroll stays continuous.
+   */
+  private readoutDistanceM(logDist: number, coordinateM: number): number {
+    const plate = this.builder.getSurfacePlate()
+    const weight = getRegimeWeights(logDist).surface
+    if (!plate || weight <= 0) return coordinateM
+    const framedM = surfaceFrameWidthM(
+      this.rig.state.distance,
+      this.camera.aspect,
+      plate.widthM,
+      plate.widthUnits,
+    )
+    if (!(framedM > 0)) return coordinateM
+    return Math.exp(Math.log(framedM) * weight + Math.log(coordinateM) * (1 - weight))
+  }
+
   private frameInfo(): EngineInfo {
     const logDist = this.rig.state.logDist
-    const distM = Math.pow(10, logDist)
+    const distM = this.readoutDistanceM(logDist, Math.pow(10, logDist))
+    this.readoutM = distM
     const c = 299792458
     const lightTimeS = distM / c
     return {
@@ -760,15 +873,43 @@ export class CosmicEngine {
     const height = Math.max(1, this.container.clientHeight)
     this.camera.aspect = width / height
     this.camera.updateProjectionMatrix()
+    this.rig.refreshFraming()
     this.renderer.setSize(width, height)
     this.postProcessing.setSize(width, height)
     this.frameAccumulator = 1
+  }
+
+  /** QA helper: fraction of non-black pixels and mean luminance of one frame. */
+  getFrameSignal() {
+    if (this.contextLost) return { nonBlack: 0, mean: 0 }
+    this.postProcessing.render(0)
+    const gl = this.renderer.getContext()
+    const width = this.renderer.domElement.width
+    const height = this.renderer.domElement.height
+    const pixels = new Uint8Array(width * height * 4)
+    gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixels)
+    let nonBlack = 0
+    let sum = 0
+    for (let i = 0; i < pixels.length; i += 4) {
+      const v = pixels[i] + pixels[i + 1] + pixels[i + 2]
+      if (v > 16) nonBlack++
+      sum += v
+    }
+    const total = Math.max(1, width * height)
+    return { nonBlack: nonBlack / total, mean: sum / (total * 3) }
   }
 
   getStats() {
     return {
       regime: this.regime,
       targetId: this.targetId,
+      logDist: this.rig.state.logDist,
+      distanceM: this.readoutM,
+      yaw: this.rig.state.yaw,
+      pitch: this.rig.state.pitch,
+      cameraDistance: this.rig.state.distance,
+      aspect: this.camera.aspect,
+      surfacePlate: this.builder.getSurfacePlate(),
       labels: this.labels.filter((entry) => !entry.element.classList.contains("is-hidden")).length,
       fps: Math.round(this.fps),
       calls: this.renderer.info.render.calls,
@@ -788,6 +929,8 @@ export class CosmicEngine {
     this.renderer.domElement.removeEventListener("pointerdown", this.onPointerDown)
     this.renderer.domElement.removeEventListener("pointerup", this.onPointerUp)
     this.renderer.domElement.removeEventListener("pointercancel", this.onPointerCancel)
+    this.renderer.domElement.removeEventListener("webglcontextlost", this.onContextLost)
+    this.renderer.domElement.removeEventListener("webglcontextrestored", this.onContextRestored)
     this.rig.dispose()
     this.postProcessing.dispose()
     for (const built of Object.values(this.regimes)) {
@@ -813,6 +956,12 @@ function applyGroupOpacity(group: THREE.Group, weight: number) {
             if (m.userData.baseOpacity !== undefined) {
               m.opacity = m.userData.baseOpacity as number
             }
+            if (m instanceof THREE.ShaderMaterial && m.uniforms.uOpacity) {
+              if (m.userData.baseUniformOpacity === undefined) {
+                m.userData.baseUniformOpacity = m.uniforms.uOpacity.value
+              }
+              m.uniforms.uOpacity.value = m.userData.baseUniformOpacity as number
+            }
           }
         }
       })
@@ -825,6 +974,13 @@ function applyGroupOpacity(group: THREE.Group, weight: number) {
     if (mesh.material) {
       const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
       for (const m of mats) {
+        if (m instanceof THREE.ShaderMaterial && m.uniforms.uOpacity) {
+          if (m.userData.baseUniformOpacity === undefined) {
+            m.userData.baseUniformOpacity = m.uniforms.uOpacity.value
+          }
+          m.uniforms.uOpacity.value = (m.userData.baseUniformOpacity as number) * weight
+          continue
+        }
         if (m.userData.baseOpacity === undefined) {
           m.userData.baseOpacity = m.opacity ?? 1
         }

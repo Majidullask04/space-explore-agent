@@ -1,134 +1,115 @@
 # space-explore-agent
 
-A production-grade **Agentic Space Explorer** — explore the entire known cosmos in one continuous outward journey, starting from *where you are right now* on an interactive Earth map, lifting off through the atmosphere into orbit, flying across the Sun and the full Solar System, and continuing outward through nearby stars and exoplanets, the Milky Way galaxy, neighboring galaxies, and the observable universe.
+A photorealistic, continuous Space Exploration Platform. Start at your own location on Earth and travel in one uninterrupted gesture to the edge of the observable universe — 93 billion light-years away — and back.
 
-The journey is piloted both **manually** (orbit, zoom, free-fly, click-to-focus, scale ladder) and **autonomously** by an AI **Astrogation Agent** that turns natural language into real flight/simulation commands.
+There is no HUD furniture: no search bars, command dock, topic chips or checkbox panels. The 3D universe is full-bleed. Only two whisper-quiet overlays remain: a top-left physical readout (distance and light-travel time) and a far-right hairline depth scrubber.
 
 ---
 
-## Quick Start
+## Quick start
 
 ```bash
-# 1. Install (workspace root)
-npm install
-
-# 2. Run the explorer app (Vite dev, port 5173)
-npm run dev
-
-# 3. (Optional) Run the agent backend for live LLM tool-calling
-npm run server
+npm install          # workspace root
+npm run dev          # Vite dev server for space-explorer
+npm run build        # tsc -b && vite build
+npm run lint         # oxlint
+npm run verify:shots # headless six-scale visual QA (needs Chrome)
 ```
 
-Open the printed localhost URL in your browser. The app works fully offline with zero configuration — the agent falls back to a **deterministic local planner** when no API key is set.
-
-### Preset missions
-Use the **Agent Command Dock** (bottom of the screen) or click any chip to launch a narrated multi-stop flight:
-
-- **Full Journey: My Location → Edge of the Universe**
-- **Tour the Solar System**
-- **Track Live ISS**
-- **Nearest Exoplanets**
-- Any natural-language command: *"fly to Saturn's rings"*, *"compare Earth and Mars"*, *"zoom out to Andromeda"*.
+The app runs with zero configuration. `NASA_API_KEY` is optional and defaults to `DEMO_KEY`; copy `space-explorer/.env.example` to `.env` to set your own key.
 
 ---
 
-## Feature Overview
+## Interaction
 
-### Six linked spatial scales (~27 orders of magnitude)
-| Scale | Regime | Contents |
-|---|---|---|
-| 0 | `earth_map` | Your geolocated position on an interactive map/globe, live coordinates, zenith vector, **Launch from Here** |
-| 1 | `earth_orbit` | Troposphere → Stratosphere → Kármán line → LEO → GEO → full 3D Earth–Moon system, day/night terminator, atmospheric rim glow, live ISS track |
-| 2 | `solar_system` | Sun (procedural corona shader), all planets + asteroid & Kuiper belts, Saturn's rings, Galilean moons, Voyager 1/2 trajectories, heliopause, **J2000 Keplerian motion** + time-warp |
-| 3 | `interstellar` | Proxima & Alpha Centauri, Barnard's Star, Sirius, Epsilon Eridani, Tau Ceti, TRAPPIST-1, Kepler-186f, Betelgeuse with habitable-zone indicators & light-travel time |
-| 4 | `milky_way` | GPU-particle spiral galaxy (~100k ly), Orion Arm (Solar System origin), Sagittarius A*, Orion/Eagle/Crab nebulae, Messier 13 |
-| 5 | `observable_universe` | Andromeda (M31), Triangulum (M33), Virgo Supercluster, Laniakea filaments, CMB horizon (~93 Bly) |
-
-Transition is handled by a **floating-origin / multi-regime logarithmic scale controller** with GSAP camera splines and opacity crossfades — zero float32 jitter or Z-fighting.
-
-### Agentic architecture
-- **Client-executed tools**: `locate_user_origin`, `fly_to_target`, `set_scale_regime`, `run_mission_tour`, `set_time_warp`, `toggle_layers`, `compare_bodies`, `fetch_live_iss`.
-- **`/api/agent`** (Express backend) supports OpenAI / Gemini / OpenAI-compatible structured tool calling.
-- **Mandatory zero-key fallback**: a local intent-router + mission planner powers every preset mission and common command offline.
-- **Live ISS** fetched from `api.wheretheiss.at` with a graceful simulated fallback.
-
-### Hallmark Vantage design system
-- Locked CSS tokens in `src/styles/global.css` (obsidian `#05070B` canvas, slate-glass HUD panels, `#F1F5F9`/`#94A3B8` text, `#38BDF8` telemetry accent, `#F59E0B` active-mission state).
-- **Zero emojis** anywhere — crisp geometric `lucide-react` SVG icons only.
-- Tabular-nums monospace for all coordinates/altitude/distance/velocity/light-travel time.
-- Full-bleed 3D viewport + collapsible HUD: top telemetry strip, left vertical scale ladder, right inspector/compare drawer, bottom agent dock.
-- GPU-composited UI transitions, `prefers-reduced-motion`, `dpr` capped at `[1,2]`, instanced meshes, procedural/self-contained textures, proper disposal, WebGL context-loss recovery.
-
----
-
-## Repository Layout
-
-```
-.
-├── space-explorer/            # The Agentic Space Explorer app (Vite + React 19 + TS + Three.js + GSAP)
-│   ├── src/
-│   │   ├── App.tsx            # App shell / HUD orchestration
-│   │   ├── main.tsx
-│   │   ├── components/
-│   │   │   ├── SceneCanvas.tsx        # <canvas> host for the Three.js engine
-│   │   │   └── HUD/                   # TopTelemetryBar, ScaleLadder, Inspector,
-│   │   │                              # CompareDrawer, LayerControls, AgentCommandDock
-│   │   ├── engine/                    # SpaceEngine, SceneBuilder, materials, textures,
-│   │   │                              # scaleController (floating-origin / regimes)
-│   │   ├── data/catalog/              # Typed astronomical catalog: earth, solarSystem,
-│   │   │                              # interstellar, galaxy, universe, regimes, units, types
-│   │   ├── agent/                     # intentRouter, executor (tool-calling), types
-│   │   ├── hooks/                     # useGeolocation, useLiveISS
-│   │   └── styles/                    # global.css (tokens), hud.css
-│   ├── server/index.mjs       # Express agent backend: /api/agent + LLM/fallback
-│   ├── scripts/verify-shots.mjs  # Headless screenshot QA across all 6 scales
-│   ├── vite.config.ts
-│   └── package.json
-├── cosmos/                    # Archival vanilla Three.js free-flight simulator (reference)
-├── my-time/                   # Archival Vite/React/Three scroll-story app (reference toolchain)
-└── package.json               # Root scripts wired to run space-explorer
-```
-
-**Root scripts** (`npm run …` at the workspace root):
-
-| Script | Runs |
+| Gesture | Result |
 |---|---|
-| `dev` | Vite dev server for `space-explorer` |
-| `build` | TypeScript typecheck + production build |
-| `lint` | Oxlint (zero warnings/errors enforced) |
-| `verify:shots` | Headless screenshot QA across all scales |
-| `server` | Start the Express agent backend |
+| Wheel / trackpad / two-finger pinch | Physical inertia-driven logarithmic zoom through 25 orders of magnitude |
+| Drag (mouse or one finger) | Orbit the active focal point at any depth |
+| Tap a body or its label | Damped spline flight to the target, then its NASA fact sheet |
+| Scroll or drag while focused | Manual control resumes instantly; the fact sheet dismisses |
+| Far-right hairline scrubber | Jump or gently scrub across the entire observable depth |
 
 ---
 
-## Configuration
+## The six regimes (one continuous scale)
 
-All settings are optional — the app runs fully offline with no configuration.
-
-| Variable | Purpose | Required |
+| Range (`logDist`, metres) | Regime | Contents |
 |---|---|---|
-| `VITE_AGENT_PROVIDER` | `openai` \| `gemini` \| `openai-compatible` | No (defaults to fallback) |
-| `VITE_AGENT_MODEL` | Model id (e.g. `gpt-4o-mini`) | No |
-| `AGENT_API_KEY` | Provider API key (server-side only, never in the client) | No |
-| `AGENT_MODEL` | Server-side model override | No |
-| `VITE_PROXY_TARGET` | Vite dev proxy target for `/api/agent` | No |
+| 2.0 – 5.4 | Your Earth location | NASA GIBS Blue Marble / VIIRS satellite mosaic, your coordinates |
+| 4.6 – 8.8 | Atmosphere & orbit | GLSL Earth (Blue Marble day, Black Marble night lights, ocean glint, clouds, Rayleigh limb), real UTC terminator, Moon, live ISS |
+| 7.8 – 13.8 | Sun & Solar System | Limb-darkened Sun with corona, all 8 planets on real heliocentric orbits, Moon, Galilean moons, asteroid/Kuiper belts, Saturn's shadowed rings, Voyager 1/2, JWST, Parker Solar Probe, New Horizons |
+| 12.6 – 18.2 | Interstellar neighbourhood | 19,210-star Hipparcos/HYG catalogue with real parallax and blackbody colours, nearby named stars and confirmed exoplanet fields |
+| 17.0 – 22.8 | Milky Way | ~96,000-particle volumetric galaxy: warm bar and bulge, logarithmic spiral arms, diffuse disk, dust lanes, Orion Arm origin, particle nebulae |
+| 21.5 – 26.944 | Local Group → Universe | Milky Way + Andromeda + Triangulum, 3D filamentary cosmic web with supercluster cores, particulate Planck CMB horizon at 93 Bly |
 
-> Secrets are never committed. Add your key to a local `.env` file (gitignored); the `.env.example` documents these names. Without a key, the agent uses the deterministic local planner.
+Regime weights crossfade continuously; a single logarithmic coordinate drives both rendering and the telemetry. Beyond the surface the readout is the true physical distance (`km → AU → ly → kly → Mly → Bly`) with its light-travel time (`ms → s → min → hr → yr → Myr → Byr`). The surface regime renders a fixed regional mosaic, so there the readout reports the ground actually framed by the camera (e.g. ~666 km across the launch view) and hands back to the coordinate as that plate fades into the globe.
+
+---
+
+## Live NASA science
+
+The Vite dev/preview server mounts the NASA proxy at `/api/nasa/*`, which removes browser CORS problems, caches responses on disk, and degrades to the app's verified snapshots with HTTP 200 when an upstream is rate-limited or unavailable.
+
+- ISS position and velocity: `api.wheretheiss.at`, smoothed between samples
+- Confirmed exoplanets: NASA Exoplanet Archive TAP (`pscomppars`)
+- Today's near-Earth objects: `api.nasa.gov/neo/rest/v1/feed`
+- Active solar flares: `api.nasa.gov/DONKI/FLR`
+- Imagery: `images-api.nasa.gov` (NASA/Hubble/JWST photographs with caption and credit)
+- Surface imagery: NASA GIBS WMTS `BlueMarble_ShadedRelief_Bathymetry` / VIIRS true colour
+
+Planetary and lunar positions, and the subsolar terminator, come from `astronomy-engine` for the actual UTC instant.
+
+---
+
+## Architecture
+
+```
+space-explorer/
+├── src/
+│   ├── App.tsx                     # Canvas + two overlays + on-demand fact sheet
+│   ├── components/
+│   │   ├── SceneCanvas.tsx         # Engine host, star/ISS/exoplanet loading
+│   │   └── HUD/
+│   │       ├── MinimalHUD.tsx      # Top-left readout + hairline scrubber
+│   │       └── FactCard.tsx        # NASA fact sheet, imagery, live telemetry
+│   ├── engine/
+│   │   ├── CosmicEngine.ts         # Render loop, regimes, opacity crossfades, picking
+│   │   ├── CameraRig.ts            # Damped orbit/pinch/wheel + GSAP flights
+│   │   ├── scaleController.ts      # logDist, regime weights, units, camera curve
+│   │   ├── SceneBuilder.ts         # Six regimes, catalog bodies, particles
+│   │   ├── earthMaterial.ts        # Earth/cloud/atmosphere/Sun GLSL shaders
+│   │   ├── helpers.ts              # Star shaders, markers, disposal
+│   │   └── textures.ts             # GIBS mosaic + procedural textures
+│   ├── data/
+│   │   ├── bodies.ts               # Verified physical constants and captions
+│   │   ├── snapshots.ts            # Offline fallbacks
+│   │   └── catalog/                # Units, regimes, per-scale catalogues
+│   ├── hooks/                      # Geolocation, live ISS
+│   └── styles/                     # Tokens, minimal HUD
+├── server/nasa-api.mjs             # Shared NASA proxy (dev, preview, standalone)
+├── scripts/verify-shots.mjs        # Puppeteer visual QA
+└── public/                         # NASA textures, star catalogue, fonts
+```
+
+`my-time/` and `cosmos/` are preserved untouched as reference projects.
 
 ---
 
 ## Verification
 
-```bash
-cd space-explorer
-npm run lint          # oxlint → 0 warnings, 0 errors
-npm run build         # tsc -b && vite build → clean bundle
-npm run verify:shots  # headless screenshots across earth_map → observable_universe
-```
+`npm run verify:shots` boots the production build, drives the engine through all six regimes, captures a screenshot of each plus an open NASA fact sheet, and fails on:
+
+- any search bar, chip row, checkbox panel or boxed ladder
+- missing/incorrect distance or light-time units at any scale
+- an empty frame at any scale
+- a fact sheet that does not open or dismiss on scroll
+- any console error or WebGL shader error
+
+Screenshots and `verify-report.json` are written to `space-explorer/.shots/`.
 
 ---
 
-## License & Acknowledgments
-- Built on Three.js, Vite, React, GSAP, and `lucide-react` (MIT).
-- Astronomical catalog uses real physical constants, Keplerian elements, and verified distances.
-- ISS data via [wheretheiss.at](https://wheretheiss.at) with offline fallback.
+## Credits
+
+Three.js, React 19, Vite, GSAP, `astronomy-engine`. Planetary textures NASA/JPL/USGS; imagery NASA, ESA, Hubble and JWST. ISS data via wheretheiss.at. Hipparcos/HYG star catalogue via astronexus/HYG-Database.

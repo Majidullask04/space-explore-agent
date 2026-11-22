@@ -341,10 +341,27 @@ export function nebulaSpriteTexture(color = "#d98a9a", seed = 1): THREE.CanvasTe
 /* NASA GIBS surface mosaic                                            */
 /* ------------------------------------------------------------------ */
 
+export interface SurfaceRegion {
+  lonMin: number
+  lonMax: number
+  latMin: number
+  latMax: number
+}
+
 export interface SurfaceMosaic {
   texture: THREE.Texture
-  bounds: { lonMin: number; lonMax: number; latMin: number; latMax: number }
+  bounds: SurfaceRegion
   source: "gibs" | "fallback"
+}
+
+/** One definition of the regional mosaic footprint, shared by every path. */
+export function surfaceRegion(lat: number, lng: number, spanLat = 9, spanLon = 14): SurfaceRegion {
+  return {
+    latMin: Math.max(-82, lat - spanLat / 2),
+    latMax: Math.min(82, lat + spanLat / 2),
+    lonMin: Math.max(-180, lng - spanLon / 2),
+    lonMax: Math.min(180, lng + spanLon / 2),
+  }
 }
 
 function mercatorY(latDeg: number): number {
@@ -363,16 +380,10 @@ async function fetchTile(layer: string, z: number, x: number, y: number): Promis
 }
 
 export async function buildGibsMosaic(
-  lat: number,
-  lng: number,
-  spanLat = 9,
-  spanLon = 14,
+  region: SurfaceRegion,
   layer = "BlueMarble_ShadedRelief_Bathymetry",
 ): Promise<SurfaceMosaic> {
-  const latMin = Math.max(-82, lat - spanLat / 2)
-  const latMax = Math.min(82, lat + spanLat / 2)
-  const lonMin = Math.max(-180, lng - spanLon / 2)
-  const lonMax = Math.min(180, lng + spanLon / 2)
+  const { latMin, latMax, lonMin, lonMax } = region
   const z = 6
   const n = 2 ** z
   const tileSize = 256
@@ -381,7 +392,7 @@ export async function buildGibsMosaic(
   const y0 = Math.floor(mercatorY(latMax) * n)
   const y1 = Math.floor(mercatorY(latMin) * n)
   if ((x1 - x0 + 1) * (y1 - y0 + 1) > 36) {
-    return fallbackMosaic(lat, lng, spanLat, spanLon)
+    return fallbackMosaic(region)
   }
 
   const mosaic = document.createElement("canvas")
@@ -405,7 +416,7 @@ export async function buildGibsMosaic(
   }
   await Promise.all(jobs)
   if (failures > 0 && failures >= jobs.length) {
-    return fallbackMosaic(lat, lng, spanLat, spanLon)
+    return fallbackMosaic(region)
   }
 
   const out = document.createElement("canvas")
@@ -423,23 +434,15 @@ export async function buildGibsMosaic(
   const tex = canvasTexture(out)
   tex.wrapS = THREE.ClampToEdgeWrapping
   tex.wrapT = THREE.ClampToEdgeWrapping
-  return { texture: tex, bounds: { lonMin, lonMax, latMin, latMax }, source: "gibs" }
+  return { texture: tex, bounds: region, source: "gibs" }
 }
 
-function fallbackMosaic(lat: number, lng: number, spanLat: number, spanLon: number): SurfaceMosaic {
-  const tex = texture("/textures/earth_day.jpg")
-  const lonMin = Math.max(-180, lng - spanLon / 2)
-  const lonMax = Math.min(180, lng + spanLon / 2)
-  const latMin = Math.max(-82, lat - spanLat / 2)
-  const latMax = Math.min(82, lat + spanLat / 2)
-  return { texture: tex, bounds: { lonMin, lonMax, latMin, latMax }, source: "fallback" }
+function fallbackMosaic(region: SurfaceRegion): SurfaceMosaic {
+  return { texture: texture("/textures/earth_day.jpg"), bounds: region, source: "fallback" }
 }
 
 /** Crop a texture to an equirectangular region for the fallback map plane. */
-export function cropTextureRegion(
-  source: THREE.Texture,
-  bounds: { lonMin: number; lonMax: number; latMin: number; latMax: number },
-): THREE.Texture {
+export function cropTextureRegion(source: THREE.Texture, bounds: SurfaceRegion): THREE.Texture {
   const tex = source.clone()
   tex.needsUpdate = true
   tex.wrapS = THREE.ClampToEdgeWrapping

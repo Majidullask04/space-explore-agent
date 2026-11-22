@@ -19,12 +19,15 @@ const STAR_VERTEX = /* glsl */ `
   uniform float uMinSize;
   uniform float uMaxSize;
   varying vec3 vColor;
+  #include <common>
+  #include <logdepthbuf_pars_vertex>
   void main() {
     vColor = aColor;
     vec4 mv = modelViewMatrix * vec4(position, 1.0);
     float px = aSize * uPixelRatio * (uScale / max(1.0, -mv.z));
     gl_PointSize = clamp(px, uMinSize, uMaxSize);
     gl_Position = projectionMatrix * mv;
+    #include <logdepthbuf_vertex>
   }
 `
 
@@ -32,7 +35,9 @@ const STAR_FRAGMENT = /* glsl */ `
   uniform float uOpacity;
   uniform float uSoft;
   varying vec3 vColor;
+  #include <logdepthbuf_pars_fragment>
   void main() {
+    #include <logdepthbuf_fragment>
     vec2 p = gl_PointCoord - vec2(0.5);
     float d = length(p);
     if (d > 0.5) discard;
@@ -60,8 +65,7 @@ export interface StarFieldOptions {
   soft?: boolean
 }
 
-export function createStarPoints(points: StarPoint[], options: StarFieldOptions = {}): THREE.Points {
-  const geometry = new THREE.BufferGeometry()
+function fillStarGeometry(geometry: THREE.BufferGeometry, points: StarPoint[]) {
   const position = new Float32Array(points.length * 3)
   const color = new Float32Array(points.length * 3)
   const size = new Float32Array(points.length)
@@ -78,6 +82,19 @@ export function createStarPoints(points: StarPoint[], options: StarFieldOptions 
   geometry.setAttribute("position", new THREE.BufferAttribute(position, 3))
   geometry.setAttribute("aColor", new THREE.BufferAttribute(color, 3))
   geometry.setAttribute("aSize", new THREE.BufferAttribute(size, 1))
+}
+
+/** Replace a star cloud's point data in place, keeping its material. */
+export function updateStarPoints(cloud: THREE.Points, points: StarPoint[]) {
+  const geometry = new THREE.BufferGeometry()
+  fillStarGeometry(geometry, points)
+  cloud.geometry.dispose()
+  cloud.geometry = geometry
+}
+
+export function createStarPoints(points: StarPoint[], options: StarFieldOptions = {}): THREE.Points {
+  const geometry = new THREE.BufferGeometry()
+  fillStarGeometry(geometry, points)
 
   const material = new THREE.ShaderMaterial({
     uniforms: {

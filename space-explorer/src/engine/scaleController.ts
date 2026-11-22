@@ -84,35 +84,75 @@ export function getRegionName(logDist: number, city?: string): string {
   return "Observable Universe · Planck CMB Horizon"
 }
 
+/**
+ * One continuous camera-distance curve, anchored to the aesthetic home
+ * distance of every regime. Smooth interpolation through the anchors means a
+ * wheel gesture right after landing on a regime never lurches the camera.
+ */
+const CAMERA_ANCHORS: Array<[number, number]> = [
+  // Surface: the camera pulls back monotonically, so pinching in frames less
+  // ground instead of more. The pull-in after 4.4 happens under the globe
+  // crossfade, where the surface mosaic is already fading out.
+  [2.0, 300],
+  [2.4, 400],
+  [4.4, 440],
+  [6.2, 300],
+  [8.2, 330],
+  [10.5, 300],
+  [13.2, 220],
+  [16.6, 140],
+  [17.6, 160],
+  [20.2, 190],
+  [22.2, 240],
+  [26.5, 300],
+  [26.944, 320],
+]
+
 export function getCameraDistanceForLogDist(logDist: number): number {
-  if (logDist < 5.0) {
-    // surface: 140 to 1600
-    const t = Math.max(0, Math.min(1, (logDist - 2.0) / (5.0 - 2.0)))
-    return 140 * Math.pow(1600 / 140, t)
+  const clamped = Math.max(LOG_MIN, Math.min(LOG_MAX, logDist))
+  for (let i = 1; i < CAMERA_ANCHORS.length; i++) {
+    const [x1, y1] = CAMERA_ANCHORS[i - 1]
+    const [x2, y2] = CAMERA_ANCHORS[i]
+    if (clamped <= x2) {
+      const t = (clamped - x1) / (x2 - x1)
+      const smooth = t * t * (3 - 2 * t)
+      return y1 * Math.pow(y2 / y1, smooth)
+    }
   }
-  if (logDist < 8.2) {
-    // orbit: 135 to 800
-    const t = Math.max(0, Math.min(1, (logDist - 5.0) / (8.2 - 5.0)))
-    return 135 * Math.pow(800 / 135, t)
-  }
-  if (logDist < 13.2) {
-    // solar_system: 75 to 950
-    const t = Math.max(0, Math.min(1, (logDist - 8.2) / (13.2 - 8.2)))
-    return 75 * Math.pow(950 / 75, t)
-  }
-  if (logDist < 17.6) {
-    // interstellar: 15 to 800
-    const t = Math.max(0, Math.min(1, (logDist - 13.2) / (17.6 - 13.2)))
-    return 15 * Math.pow(800 / 15, t)
-  }
-  if (logDist < 22.2) {
-    // milky_way: 18 to 380
-    const t = Math.max(0, Math.min(1, (logDist - 17.6) / (22.2 - 17.6)))
-    return 18 * Math.pow(380 / 18, t)
-  }
-  // universe: 25 to 520
-  const t = Math.max(0, Math.min(1, (logDist - 22.2) / (26.944 - 22.2)))
-  return 25 * Math.pow(520 / 25, t)
+  return CAMERA_ANCHORS[CAMERA_ANCHORS.length - 1][1]
+}
+
+/** Field of view shared by the camera and the frame-extent readout. */
+export const CAMERA_FOV_DEG = 48
+
+export interface SurfacePlate {
+  /** Real ground width of the regional mosaic, in metres. */
+  widthM: number
+  /** Width of the same mosaic in scene units. */
+  widthUnits: number
+  /** Height of the same mosaic in scene units. */
+  heightUnits: number
+}
+
+/** Furthest the surface camera can pull back while the mosaic still fills the frame. */
+export function surfaceMaxCameraDistance(plateHeightUnits: number, fovDeg = CAMERA_FOV_DEG): number {
+  return (plateHeightUnits * 0.96) / (2 * Math.tan((fovDeg * Math.PI) / 360))
+}
+
+/**
+ * Ground width actually framed by the surface map camera. The surface regime
+ * renders a fixed regional mosaic, so the truthful distance is the strip of
+ * ground inside the frame rather than the abstract log-depth coordinate.
+ */
+export function surfaceFrameWidthM(
+  cameraDistance: number,
+  aspect: number,
+  plateWidthM: number,
+  plateWidthUnits: number,
+  fovDeg = CAMERA_FOV_DEG,
+): number {
+  const frameUnits = 2 * cameraDistance * Math.tan((fovDeg * Math.PI) / 360) * Math.max(aspect, 0.05)
+  return Math.max(0, (frameUnits / plateWidthUnits) * plateWidthM)
 }
 
 export function formatPhysicalDistance(meters: number): string {

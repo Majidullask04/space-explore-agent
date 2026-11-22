@@ -16,8 +16,9 @@ export function loadStars(): Promise<StarRecord[]> {
       return res.json() as Promise<StarFile>
     })
     .then((data) => {
-      cache = data.stars.map(([raDeg, decDeg, mag, bv, distPc, name]) => ({
-        raDeg,
+      // The catalog stores right ascension in hours; the renderer expects degrees.
+      cache = data.stars.map(([raHours, decDeg, mag, bv, distPc, name]) => ({
+        raDeg: raHours * 15,
         decDeg,
         mag,
         bv,

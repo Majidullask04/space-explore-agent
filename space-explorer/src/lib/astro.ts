@@ -1,3 +1,5 @@
+import { Body, Ecliptic, EquatorFromVector, GeoVector, HelioVector, SiderealTime } from "astronomy-engine"
+
 export const AU_KM = 149_597_870.7
 export const LY_KM = 9.4607304725808e12
 export const PC_KM = 3.08567758149137e13
@@ -58,8 +60,39 @@ function solveKepler(M: number, e: number): number {
   return E
 }
 
-/** Heliocentric ecliptic position in AU. */
+const ASTRO_BODY: Record<string, Body> = {
+  mercury: Body.Mercury,
+  venus: Body.Venus,
+  earth: Body.Earth,
+  mars: Body.Mars,
+  jupiter: Body.Jupiter,
+  saturn: Body.Saturn,
+  uranus: Body.Uranus,
+  neptune: Body.Neptune,
+  pluto: Body.Pluto,
+}
+
+/**
+ * Exact heliocentric ecliptic J2000 position from astronomy-engine, in AU.
+ * Returns null for bodies the engine does not model so the Kepler fallback
+ * remains available.
+ */
+function precisePlanetPositionAu(id: string, date: Date): Vec3 | null {
+  const body = ASTRO_BODY[id]
+  if (!body) return null
+  try {
+    const eqj = HelioVector(body, date)
+    const ecl = Ecliptic(eqj)
+    return { x: ecl.vec.x, y: ecl.vec.y, z: ecl.vec.z }
+  } catch {
+    return null
+  }
+}
+
+/** Heliocentric ecliptic position in AU (astronomy-engine, Kepler fallback). */
 export function planetPositionAu(id: string, date: Date): Vec3 {
+  const precise = precisePlanetPositionAu(id, date)
+  if (precise) return precise
   const el = PLANET_ELEMENTS[id]
   if (!el) return { x: 0, y: 0, z: 0 }
   const n = 360 / el.periodDays
@@ -83,10 +116,33 @@ export function planetPositionAu(id: string, date: Date): Vec3 {
   }
 }
 
-/** Sample a full osculating orbit for a planet, in AU. */
+/** Geocentric ecliptic position of the Moon in AU (astronomy-engine). */
+export function moonGeoAu(date: Date): Vec3 {
+  try {
+    const ecl = Ecliptic(GeoVector(Body.Moon, date, false))
+    return { x: ecl.vec.x, y: ecl.vec.y, z: ecl.vec.z }
+  } catch {
+    return { x: 0, y: 0, z: -0.00257 }
+  }
+}
+
+/** Geocentric distance to the Moon in kilometres. */
+export function moonDistanceKm(date: Date): number {
+  const p = moonGeoAu(date)
+  return Math.hypot(p.x, p.y, p.z) * AU_KM
+}
+
+/** Sample one full orbit for a planet, in AU, using the precise ephemeris. */
 export function planetOrbitAu(id: string, samples = 256): Vec3[] {
   const el = PLANET_ELEMENTS[id]
   if (!el) return []
+  if (ASTRO_BODY[id]) {
+    const periodMs = el.periodDays * 86400000
+    const start = J2000
+    return Array.from({ length: samples }, (_, k) =>
+      planetPositionAu(id, new Date(start + (k / samples) * periodMs)),
+    )
+  }
   const w = el.peri * D2R
   const node = el.node * D2R
   const inc = el.i * D2R
@@ -145,8 +201,21 @@ export function lightSecondsForLy(ly: number): number {
   return ly * 365.25 * 86400
 }
 
-/** Approximate subsolar point for the current instant. */
+/** Exact subsolar point for the current UTC instant (astronomy-engine). */
 export function subsolarPoint(date: Date): { lat: number; lon: number } {
+  try {
+    const eqd = EquatorFromVector(GeoVector(Body.Sun, date, false))
+    const gast = SiderealTime(date) * 15
+    let lon = eqd.ra * 15 - gast
+    lon = ((((lon + 180) % 360) + 360) % 360) - 180
+    return { lat: eqd.dec, lon }
+  } catch {
+    return approximateSubsolarPoint(date)
+  }
+}
+
+/** Geometric fallback used only if the ephemeris call fails. */
+function approximateSubsolarPoint(date: Date): { lat: number; lon: number } {
   const start = Date.UTC(date.getUTCFullYear(), 0, 1)
   const doy = (date.getTime() - start) / 86400000 + 1
   const decl = -23.44 * Math.cos((2 * Math.PI * (doy + 10)) / 365.24)

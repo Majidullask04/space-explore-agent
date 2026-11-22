@@ -43,11 +43,13 @@ export class CameraRig {
   private pointers = new Map<number, { x: number; y: number }>()
   private dragging = false
   private pinchDistance = 0
+  private pinching = false
   private idle = 0
   private follow: (() => THREE.Vector3) | null = null
   private minDistance = 2
   private maxDistance = 2000
   private baseDistance = 200
+  private surfaceDistanceLimit = Number.POSITIVE_INFINITY
   private disposed = false
   private dragDistance = 0
   private logDistVelocity = 0
@@ -87,6 +89,32 @@ export class CameraRig {
     return this.baseDistance
   }
 
+  /**
+   * Camera distance for a depth, widened on narrow viewports. The surface
+   * mosaic is a fixed region, so a portrait phone would otherwise frame a
+   * blurry sliver of it instead of the same ground a desktop shows.
+   */
+  getFramedDistance(logDist: number): number {
+    const base = getCameraDistanceForLogDist(logDist)
+    if (logDist > 5) return base
+    const correction = Math.max(1, 1.6 / Math.max(0.3, this.camera.aspect))
+    // Only the surface zone is corrected, easing out as the globe fades in.
+    const t = THREE.MathUtils.clamp((5 - logDist) / 0.8, 0, 1)
+    const framed = base * (1 + (correction - 1) * (t * t * (3 - 2 * t)))
+    // Never pull back past the edge of the fixed regional mosaic.
+    return Math.min(framed, this.surfaceDistanceLimit)
+  }
+
+  setSurfaceDistanceLimit(distance: number) {
+    this.surfaceDistanceLimit = distance
+  }
+
+  /** Re-apply the viewport-aware framing after a resize or rotation. */
+  refreshFraming() {
+    this.desired.distance = this.getFramedDistance(this.desired.logDist)
+    this.state.distance = this.getFramedDistance(this.state.logDist)
+  }
+
   get isInteracting(): boolean {
     return this.dragging || performance.now() - this.lastInteractionTime < 1200 || Math.abs(this.logDistVelocity) > 0.005
   }
@@ -94,7 +122,7 @@ export class CameraRig {
   setLogDist(logDist: number, immediate = false) {
     const clamped = THREE.MathUtils.clamp(logDist, LOG_MIN, LOG_MAX)
     this.desired.logDist = clamped
-    this.desired.distance = getCameraDistanceForLogDist(clamped)
+    this.desired.distance = this.getFramedDistance(clamped)
     if (immediate) {
       this.state.logDist = clamped
       this.state.distance = this.desired.distance
@@ -136,6 +164,9 @@ export class CameraRig {
 
   flyTo(pose: Partial<CameraPose>, duration = 1.6, ease = "power3.inOut", onComplete?: () => void) {
     this.killTweens()
+    if (typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+      duration = 0.01
+    }
     this.logDistVelocity = 0
     const target = pose.target ?? this.desired.target.clone()
     const proxy: TweenProxy = {
@@ -215,7 +246,7 @@ export class CameraRig {
         LOG_MIN,
         LOG_MAX,
       )
-      this.desired.distance = getCameraDistanceForLogDist(this.desired.logDist)
+      this.desired.distance = this.getFramedDistance(this.desired.logDist)
       this.logDistVelocity *= Math.exp(-dt * 8.5)
     } else {
       this.logDistVelocity = 0
@@ -270,8 +301,15 @@ export class CameraRig {
   private onPointerDown = (event: PointerEvent) => {
     if (event.button !== 0 && event.pointerType === "mouse") return
     this.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY })
+    if (this.pointers.size === 1) {
+      this.pinching = false
+      this.pinchDistance = 0
+      this.dragDistance = 0
+    } else {
+      // A second finger starts a pinch: never treat this gesture as a tap.
+      this.pinching = true
+    }
     this.dragging = true
-    this.dragDistance = 0
     this.idle = 0
     this.lastInteractionTime = performance.now()
     this.killTweens()
@@ -290,11 +328,16 @@ export class CameraRig {
       const distance = Math.hypot(a.x - b.x, a.y - b.y)
       if (this.pinchDistance > 0) {
         const factor = distance / Math.max(1, this.pinchDistance)
-        // Zooming out (pinch inward) increases logDist; zooming in decreases logDist
-        const logDelta = -Math.log2(factor) * 0.8
-        this.logDistVelocity += logDelta * 0.25
+        // Fingers apart zooms in (smaller logDist); together zooms out.
+        const logDist = THREE.MathUtils.clamp(
+          this.desired.logDist - Math.log2(factor) * 1.2,
+          LOG_MIN,
+          LOG_MAX,
+        )
+        this.desired.logDist = logDist
+        this.desired.distance = this.getFramedDistance(logDist)
+        this.logDistVelocity = 0
         this.lastInteractionTime = performance.now()
-        this.killTweens()
         this.onInteraction?.()
       }
       this.pinchDistance = distance
@@ -343,7 +386,7 @@ export class CameraRig {
   }
 
   wasDrag(): boolean {
-    return this.dragDistance > 5
+    return this.dragDistance > 5 || this.pinching
   }
 
   dispose() {

@@ -6,8 +6,12 @@
   position: relative;
   width: 100vw;
   height: 100vh;
+  /* Mobile browsers size 100vh without their dynamic toolbars. */
+  height: 100dvh;
   overflow: hidden;
   background: #000000;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .scene-canvas {
@@ -21,6 +25,10 @@
   display: block;
   width: 100%;
   height: 100%;
+  /* The canvas owns every touch: no page pan, pull-to-refresh or pinch-zoom. */
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 /* ---- minimal whisper-quiet HUD root ---- */
@@ -109,6 +117,7 @@
   pointer-events: auto;
   cursor: pointer;
   user-select: none;
+  touch-action: none;
 }
 
 .depth-track {
@@ -211,6 +220,9 @@
   pointer-events: auto;
   box-shadow: 0 24px 64px rgba(0, 0, 0, 0.8), 0 0 1px rgba(255, 255, 255, 0.15);
   animation: factCardIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  touch-action: pan-y;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 @keyframes factCardIn {
@@ -341,8 +353,10 @@
 
 .fact-img {
   width: 100%;
-  height: 140px;
-  object-fit: cover;
+  height: 150px;
+  /* Never crop the scientific subject: letterbox inside the card instead. */
+  object-fit: contain;
+  background: #000000;
   display: block;
 }
 
@@ -422,7 +436,8 @@
 
 .scene-label {
   position: absolute;
-  transform: translate(-50%, -50%);
+  /* Sit just above the body so the object itself is never covered. */
+  transform: translate(-50%, calc(-100% - 7px));
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -500,5 +515,15 @@
   }
   .depth-scrubber {
     right: 14px;
+    width: 36px;
+  }
+}
+
+/* Keep the readout clear of a phone's rounded corners and notch. */
+@media (max-width: 480px) {
+  .top-readout {
+    top: max(16px, env(safe-area-inset-top));
+    left: max(16px, env(safe-area-inset-left));
+    right: 56px;
   }
 }

@@ -19,8 +19,8 @@ export default function App() {
   const [hudInfo, setHudInfo] = useState<HudInfo>({
     logDist: LOG_MIN,
     regionName: "Earth Surface",
-    distanceLabel: "100 m",
-    lightTimeLabel: "0.33 µs",
+    distanceLabel: "—",
+    lightTimeLabel: "—",
     hudDim: false,
     targetId: null,
   })

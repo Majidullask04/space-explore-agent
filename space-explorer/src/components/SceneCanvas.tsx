@@ -3,6 +3,7 @@ import { CosmicEngine, type EngineInfo, type EngineOptions } from "../engine/Cos
 import type { RegimeId } from "../data/types"
 import { DEFAULT_LAYERS } from "../engine/CosmicEngine"
 import { loadStars } from "../lib/stars"
+import { fetchExoplanets, fetchIss } from "../lib/api"
 
 interface SceneCanvasProps {
   origin: { lat: number; lng: number }
@@ -63,7 +64,24 @@ export default function SceneCanvas({
         // Fallback procedural stars already generated
       })
 
+    // Live ISS position, refreshed well inside the API rate limit.
+    let issTimer = 0
+    const refreshIss = () => {
+      void fetchIss().then((state) => {
+        if (!engineRef.current) return
+        engine.setIss(state)
+      })
+    }
+    refreshIss()
+    issTimer = window.setInterval(refreshIss, 10_000)
+
+    // Confirmed exoplanets from the NASA Exoplanet Archive.
+    void fetchExoplanets().then((list) => {
+      if (engineRef.current) engine.setExoplanets(list)
+    })
+
     return () => {
+      window.clearInterval(issTimer)
       engine.dispose()
       engineRef.current = null
     }

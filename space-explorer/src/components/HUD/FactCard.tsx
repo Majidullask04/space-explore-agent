@@ -2,9 +2,10 @@ import { useEffect, useState } from "react"
 import { BODIES } from "../../data/bodies"
 import { findBody } from "../../data/catalog"
 import { formatDistance, lightTravelLabel } from "../../data/catalog/units"
-import { fetchNasaImages } from "../../lib/api"
+import { fetchAsteroids, fetchExoplanets, fetchFlares, fetchNasaImages } from "../../lib/api"
 import type { NasaImage } from "../../data/types"
 import { useLiveISS } from "../../hooks/useLiveISS"
+import { bodyDistanceKm } from "../../engine/SceneBuilder"
 
 interface Props {
   bodyId: string
@@ -13,6 +14,7 @@ interface Props {
 
 export default function FactCard({ bodyId, onClose }: Props) {
   const [images, setImages] = useState<NasaImage[]>([])
+  const [liveRows, setLiveRows] = useState<Array<[string, string]>>([])
   const { iss, refreshIss } = useLiveISS()
 
   const catalogBody = findBody(bodyId)
@@ -46,6 +48,55 @@ export default function FactCard({ bodyId, onClose }: Props) {
     if (isIss) void refreshIss()
   }, [isIss, refreshIss])
 
+  // On-demand NASA science for the selected target only.
+  useEffect(() => {
+    let active = true
+    setLiveRows([])
+    if (legacyBody?.live === "exoplanet") {
+      void fetchExoplanets().then((list) => {
+        if (!active) return
+        const host = legacyBody.exoplanetHost?.toLowerCase() ?? ""
+        const matches = list.filter((p) => p.host.toLowerCase().includes(host))
+        const target = matches.find((p) => p.name.toLowerCase() === name.toLowerCase())
+        const rows: Array<[string, string]> = []
+        if (target?.radiusEarth) rows.push(["Radius", `${target.radiusEarth.toFixed(2)} R\u2295`])
+        if (target?.massEarth) rows.push(["Mass", `${target.massEarth.toFixed(2)} M\u2295`])
+        if (target?.eqTempK) rows.push(["Equilibrium", `${Math.round(target.eqTempK)} K`])
+        if (target?.periodDays) rows.push(["Orbit", `${target.periodDays.toFixed(2)} d`])
+        if (matches.length > 1) rows.push(["Confirmed planets", `${matches.length} in system`])
+        setLiveRows(rows)
+      })
+    } else if (bodyId === "sun") {
+      void fetchFlares().then((flares) => {
+        if (!active || !flares.length) return
+        const latest = flares[0]
+        setLiveRows([
+          ["Latest flare", latest.classType],
+          ["Peak (UTC)", (latest.peak ?? latest.begin).slice(0, 16).replace("T", " ")],
+          ["Active region", latest.activeRegion ?? "n/a"],
+          ["Events on record", `${flares.length}`],
+        ])
+      })
+    } else if (bodyId === "earth") {
+      void fetchAsteroids().then((list) => {
+        if (!active || !list.length) return
+        const closest = list[0]
+        setLiveRows([
+          ["Near-Earth today", `${list.length}`],
+          ["Closest approach", closest?.name ?? "n/a"],
+          ["Miss distance", closest ? `${Math.round(closest.missKm).toLocaleString("en-US")} km` : "n/a"],
+          ["Hazardous", list.some((a) => a.hazardous) ? "flagged" : "none"],
+        ])
+      })
+    }
+    return () => {
+      active = false
+    }
+  }, [bodyId, legacyBody?.live, legacyBody?.exoplanetHost, name])
+
+  // Live distance and one-way light time for solar-system targets.
+  const liveDistanceKm = legacyBody ? bodyDistanceKm(legacyBody, new Date()) : null
+
   // Extract telemetry facts
   const p = catalogBody?.profile
   const factsList: Array<[string, string]> = []
@@ -62,6 +113,12 @@ export default function FactCard({ bodyId, onClose }: Props) {
     }
   } else if (legacyBody?.facts) {
     factsList.push(...legacyBody.facts.slice(0, 6))
+  }
+
+  if (liveDistanceKm !== null && liveDistanceKm > 0 && Number.isFinite(liveDistanceKm)) {
+    const meters = liveDistanceKm * 1000
+    factsList.push(["Distance Now", formatDistance(meters).raw])
+    factsList.push(["Light Now", lightTravelLabel(meters)])
   }
 
   return (
@@ -109,6 +166,21 @@ export default function FactCard({ bodyId, onClose }: Props) {
               <span className="fact-val">{val}</span>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* On-demand live NASA science */}
+      {liveRows.length > 0 && (
+        <div className="fact-live-data">
+          <div className="fact-card-imagery-title">Live NASA Data</div>
+          <div className="fact-card-grid">
+            {liveRows.map(([label, val]) => (
+              <div key={label} className="fact-cell">
+                <span className="fact-label">{label}</span>
+                <span className="fact-val">{val}</span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

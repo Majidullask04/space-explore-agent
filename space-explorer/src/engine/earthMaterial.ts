@@ -23,12 +23,15 @@ const EARTH_VERTEX = /* glsl */ `
   varying vec2 vUv;
   varying vec3 vNormalW;
   varying vec3 vWorldPos;
+  #include <common>
+  #include <logdepthbuf_pars_vertex>
   void main() {
     vUv = uv;
     vec4 world = modelMatrix * vec4(position, 1.0);
     vWorldPos = world.xyz;
     vNormalW = normalize(mat3(modelMatrix) * normal);
     gl_Position = projectionMatrix * viewMatrix * world;
+    #include <logdepthbuf_vertex>
   }
 `
 
@@ -43,8 +46,10 @@ const EARTH_FRAGMENT = /* glsl */ `
   varying vec2 vUv;
   varying vec3 vNormalW;
   varying vec3 vWorldPos;
+  #include <logdepthbuf_pars_fragment>
 
   void main() {
+    #include <logdepthbuf_fragment>
     vec3 N = normalize(vNormalW);
     vec3 L = normalize(sunDirection);
     vec3 V = normalize(cameraPosition - vWorldPos);
@@ -110,7 +115,9 @@ const CLOUD_FRAGMENT = /* glsl */ `
   varying vec2 vUv;
   varying vec3 vNormalW;
   varying vec3 vWorldPos;
+  #include <logdepthbuf_pars_fragment>
   void main() {
+    #include <logdepthbuf_fragment>
     float a = texture2D(cloudMap, vUv).g;
     a = smoothstep(0.05, 0.9, a) * opacity;
     vec3 N = normalize(vNormalW);
@@ -145,7 +152,9 @@ const ATMO_FRAGMENT = /* glsl */ `
   varying vec2 vUv;
   varying vec3 vNormalW;
   varying vec3 vWorldPos;
+  #include <logdepthbuf_pars_fragment>
   void main() {
+    #include <logdepthbuf_fragment>
     vec3 N = normalize(vNormalW);
     vec3 V = normalize(cameraPosition - vWorldPos);
     float rim = pow(1.0 - abs(dot(N, V)), 3.4);
@@ -180,7 +189,9 @@ const SUN_FRAGMENT = /* glsl */ `
   varying vec2 vUv;
   varying vec3 vNormalW;
   varying vec3 vWorldPos;
+  #include <logdepthbuf_pars_fragment>
   void main() {
+    #include <logdepthbuf_fragment>
     vec3 N = normalize(vNormalW);
     vec3 V = normalize(cameraPosition - vWorldPos);
     float mu = clamp(dot(N, V), 0.0, 1.0);
